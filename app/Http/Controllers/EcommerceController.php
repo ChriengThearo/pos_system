@@ -859,12 +859,14 @@ class EcommerceController extends Controller
             'payment_amount' => ['required', 'numeric', 'min:0'],
             'recieve_amount' => ['required', 'numeric', 'min:0'],
             'payment_currency' => ['required'],
+            'payment_type' => ['nullable', 'string', 'in:cash,qr'],
             'items' => ['nullable', 'array'],
             'items.*.product_no' => ['required_with:items', 'string', 'max:20'],
             'items.*.qty' => ['required_with:items', 'integer', 'min:1', 'max:9999'],
         ]);
         $recieveAmount = (float) ($validated['recieve_amount'] ?? 0);
         $currencyNo = $this->resolveCurrencyNoFromInput($validated['payment_currency']);
+        $paymentType = $validated['payment_type'] ?? 'cash';
 
         $staff = StaffAuth::user();
         $employeeId = (int) ($staff['employee_id'] ?? 0);
@@ -945,25 +947,26 @@ class EcommerceController extends Controller
             return back()->withInput()->with('error', 'Failed to create invoice: '.$e->getMessage());
         }
 
-        $qrPayload = $this->bakongQrPayload($recieveAmount, $currencyNo);
-        $qrAmount = (float) ($qrPayload['amount'] ?? 0);
-        $qrCurrencyCode = (string) ($qrPayload['currency_code'] ?? 'USD');
-        $qrString = null;
-        try {
-            $qrString = BakongQR::generateMerchantQR($qrAmount, (string) $invoiceNo, $qrCurrencyCode);
-        } catch (\Throwable $e) {
-            // QR generation failure should not block invoice creation
-        }
-
         $redirect = redirect()
             ->route('invoices.index', ['invoice_no' => $invoiceNo])
             ->with('success', "Invoice #{$invoiceNo} created.");
 
-        if ($qrString) {
-            $redirect
-                ->with('bakong_qr', $qrString)
-                ->with('bakong_qr_amount', $qrAmount)
-                ->with('bakong_qr_currency', $qrCurrencyCode);
+        if ($paymentType === 'qr') {
+            $qrPayload = $this->bakongQrPayload($recieveAmount, $currencyNo);
+            $qrAmount = (float) ($qrPayload['amount'] ?? 0);
+            $qrCurrencyCode = (string) ($qrPayload['currency_code'] ?? 'USD');
+            try {
+                $qrString = BakongQR::generateMerchantQR($qrAmount, (string) $invoiceNo, $qrCurrencyCode);
+            } catch (\Throwable $e) {
+                $qrString = null;
+            }
+
+            if ($qrString) {
+                $redirect
+                    ->with('bakong_qr', $qrString)
+                    ->with('bakong_qr_amount', $qrAmount)
+                    ->with('bakong_qr_currency', $qrCurrencyCode);
+            }
         }
 
         return $redirect;
@@ -978,9 +981,11 @@ class EcommerceController extends Controller
             'payment_amount' => ['required', 'numeric', 'min:0'],
             'recieve_amount' => ['required', 'numeric', 'min:0'],
             'payment_currency' => ['required'],
+            'payment_type' => ['nullable', 'string', 'in:cash,qr'],
         ]);
         $recieveAmount = (float) ($validated['recieve_amount'] ?? 0);
         $currencyNo = $this->resolveCurrencyNoFromInput($validated['payment_currency']);
+        $paymentType = $validated['payment_type'] ?? 'cash';
 
         $conn = $this->db();
 
@@ -1059,25 +1064,26 @@ class EcommerceController extends Controller
             return back()->withInput()->with('error', 'Unable to add invoice items: '.$e->getMessage());
         }
 
-        $qrPayload = $this->bakongQrPayload($recieveAmount, $currencyNo);
-        $qrAmount = (float) ($qrPayload['amount'] ?? 0);
-        $qrCurrencyCode = (string) ($qrPayload['currency_code'] ?? 'USD');
-        $qrString = null;
-        try {
-            $qrString = BakongQR::generateMerchantQR($qrAmount, (string) $invoiceNo, $qrCurrencyCode);
-        } catch (\Throwable $e) {
-            // QR generation failure should not block invoice update
-        }
-
         $redirect = redirect()
             ->route('invoices.index', ['invoice_no' => $invoiceNo])
             ->with('success', 'Invoice items added successfully.');
 
-        if ($qrString) {
-            $redirect
-                ->with('bakong_qr', $qrString)
-                ->with('bakong_qr_amount', $qrAmount)
-                ->with('bakong_qr_currency', $qrCurrencyCode);
+        if ($paymentType === 'qr') {
+            $qrPayload = $this->bakongQrPayload($recieveAmount, $currencyNo);
+            $qrAmount = (float) ($qrPayload['amount'] ?? 0);
+            $qrCurrencyCode = (string) ($qrPayload['currency_code'] ?? 'USD');
+            try {
+                $qrString = BakongQR::generateMerchantQR($qrAmount, (string) $invoiceNo, $qrCurrencyCode);
+            } catch (\Throwable $e) {
+                $qrString = null;
+            }
+
+            if ($qrString) {
+                $redirect
+                    ->with('bakong_qr', $qrString)
+                    ->with('bakong_qr_amount', $qrAmount)
+                    ->with('bakong_qr_currency', $qrCurrencyCode);
+            }
         }
 
         return $redirect;

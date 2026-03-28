@@ -234,6 +234,7 @@
         <input type="hidden" id="invoice-payment-amount-input" name="payment_amount" form="{{ $isNew ? 'new-invoice-form' : 'invoice-items-form' }}" value="">
         <input type="hidden" id="invoice-recieve-amount-input" name="recieve_amount" form="{{ $isNew ? 'new-invoice-form' : 'invoice-items-form' }}" value="">
         <input type="hidden" id="invoice-payment-currency-input" name="payment_currency" form="{{ $isNew ? 'new-invoice-form' : 'invoice-items-form' }}" value="{{ $initialPaymentCurrency }}">
+        <input type="hidden" id="invoice-payment-type-input" name="payment_type" form="{{ $isNew ? 'new-invoice-form' : 'invoice-items-form' }}" value="cash">
 
         <section class="card">
             <div class="grid grid-3">
@@ -286,6 +287,7 @@
                     <div>
                         <label for="invoice-receive-amount">Recieve Amount</label>
                         <input id="invoice-receive-amount" type="number" min="0" step="0.01" placeholder="0.00" autocomplete="off">
+                        <div id="invoice-receive-over-warning" style="display: none; color: #d32f2f; font-size: 0.88rem; margin-top: 4px; font-weight: 600;">Received amount cannot exceed the invoice amount for QR payment.</div>
                     </div>
                     <div class="actions" id="invoice-payment-debt-row" style="justify-content: space-between; align-items: baseline;">
                         <strong>Debt:</strong>
@@ -299,6 +301,21 @@
                 <div class="actions" style="justify-content: flex-end; gap: 10px; margin-top: 18px;">
                     <button type="button" class="btn btn-muted" id="invoice-payment-cancel">Cancel</button>
                     <button type="button" class="btn btn-primary" id="invoice-payment-submit">Submit</button>
+                </div>
+            </div>
+        </div>
+
+        <div
+            id="payment-type-modal"
+            style="position: fixed; inset: 0; background: rgba(10, 14, 20, 0.55); display: none; align-items: center; justify-content: center; z-index: 1050; padding: 16px;"
+            aria-hidden="true"
+        >
+            <div class="card" role="dialog" aria-modal="true" aria-labelledby="payment-type-title" style="width: min(380px, 100%); margin: 0; text-align: center;">
+                <h3 id="payment-type-title" style="margin-top: 0;">Payment Type</h3>
+                <p class="subtle" style="margin-bottom: 18px;">Choose how the customer will pay</p>
+                <div class="actions" style="justify-content: center; gap: 12px;">
+                    <button type="button" class="btn btn-muted" id="payment-type-cash" style="min-width: 120px; font-size: 1.05rem;">Cash</button>
+                    <button type="button" class="btn btn-primary" id="payment-type-qr" style="min-width: 120px; font-size: 1.05rem;">QR</button>
                 </div>
             </div>
         </div>
@@ -397,6 +414,11 @@
                 const paymentCurrencySelect = document.getElementById('invoice-payment-currency');
                 const paymentCurrencyInput = document.getElementById('invoice-payment-currency-input');
                 const paymentRateNote = document.getElementById('invoice-payment-rate-note');
+                const paymentTypeModal = document.getElementById('payment-type-modal');
+                const paymentTypeCashBtn = document.getElementById('payment-type-cash');
+                const paymentTypeQrBtn = document.getElementById('payment-type-qr');
+                const paymentTypeInput = document.getElementById('invoice-payment-type-input');
+                const receiveOverWarning = document.getElementById('invoice-receive-over-warning');
                 const baseSubtotal = Number(@json($subtotal));
                 const baseDiscountRate = Number(@json($discountRate));
 
@@ -407,6 +429,7 @@
                 let rowIndex = 0;
                 let latestGrandTotal = Number.isFinite(@json($grandTotal)) ? Number(@json($grandTotal)) : 0;
                 let allowConfirmedSubmit = false;
+                let selectedPaymentType = 'cash';
 
                 const updateState = () => {
                     const hasRows = rowsContainer.querySelectorAll('tr').length > 0;
@@ -570,31 +593,45 @@
                     }
                     updateExchangeRateNote();
                     updatePaymentAmountPreview();
-                    receiveAmountInput.value = '';
+                    const defaultAmount = roundMoney(latestGrandTotal * selectedCurrencyRate());
+                    receiveAmountInput.value = defaultAmount.toFixed(2);
                     updateDebtPreview();
+                    validateQrReceiveAmount();
                     paymentModal.style.display = 'flex';
                     paymentModal.setAttribute('aria-hidden', 'false');
                     receiveAmountInput.focus();
                 };
 
+                const validateQrReceiveAmount = () => {
+                    if (selectedPaymentType !== 'qr' || !receiveOverWarning) {
+                        if (receiveOverWarning) receiveOverWarning.style.display = 'none';
+                        if (paymentSubmitButton) paymentSubmitButton.disabled = false;
+                        return;
+                    }
+                    const receive = Number(receiveAmountInput?.value || 0);
+                    const amountInSelectedCurrency = roundMoney(latestGrandTotal * selectedCurrencyRate());
+                    const isOver = receive > amountInSelectedCurrency;
+                    receiveOverWarning.style.display = isOver ? '' : 'none';
+                    if (paymentSubmitButton) paymentSubmitButton.disabled = isOver;
+                };
+
                 receiveAmountInput?.addEventListener('input', () => {
                     updateDebtPreview();
+                    validateQrReceiveAmount();
                 });
 
                 paymentCurrencySelect?.addEventListener('change', () => {
                     updateExchangeRateNote();
                     updatePaymentAmountPreview();
                     updateDebtPreview();
+                    validateQrReceiveAmount();
                 });
 
                 paymentCancelButton?.addEventListener('click', () => {
                     closePaymentModal();
                 });
 
-                paymentSubmitButton?.addEventListener('click', () => {
-                    if (!activeForm) {
-                        return;
-                    }
+                const preparePaymentHiddenInputs = () => {
                     const receive = Number(receiveAmountInput?.value || 0);
                     const normalizedReceive = Number.isFinite(receive) ? Math.max(0, receive) : 0;
                     const exchangeRateToUsd = selectedCurrencyRate();
@@ -608,13 +645,56 @@
                     if (paymentCurrencyInput && paymentCurrencySelect) {
                         paymentCurrencyInput.value = String(paymentCurrencySelect.value || '').trim();
                     }
+                };
+
+                const submitFormAfterPaymentType = () => {
                     allowConfirmedSubmit = true;
                     closePaymentModal();
+                    if (paymentTypeModal) {
+                        paymentTypeModal.style.display = 'none';
+                        paymentTypeModal.setAttribute('aria-hidden', 'true');
+                    }
                     if (typeof activeForm.requestSubmit === 'function') {
                         activeForm.requestSubmit(saveButton || undefined);
                     } else {
                         activeForm.submit();
                     }
+                };
+
+                const openPaymentTypeModal = () => {
+                    if (paymentTypeModal) {
+                        paymentTypeModal.style.display = 'flex';
+                        paymentTypeModal.setAttribute('aria-hidden', 'false');
+                    }
+                };
+
+                const closePaymentTypeModal = () => {
+                    if (paymentTypeModal) {
+                        paymentTypeModal.style.display = 'none';
+                        paymentTypeModal.setAttribute('aria-hidden', 'true');
+                    }
+                };
+
+                paymentTypeCashBtn?.addEventListener('click', () => {
+                    selectedPaymentType = 'cash';
+                    if (paymentTypeInput) paymentTypeInput.value = 'cash';
+                    closePaymentTypeModal();
+                    openPaymentModal();
+                });
+
+                paymentTypeQrBtn?.addEventListener('click', () => {
+                    selectedPaymentType = 'qr';
+                    if (paymentTypeInput) paymentTypeInput.value = 'qr';
+                    closePaymentTypeModal();
+                    openPaymentModal();
+                });
+
+                paymentSubmitButton?.addEventListener('click', () => {
+                    if (!activeForm) {
+                        return;
+                    }
+                    preparePaymentHiddenInputs();
+                    submitFormAfterPaymentType();
                 });
 
                 paymentModal?.addEventListener('click', (event) => {
@@ -623,9 +703,19 @@
                     }
                 });
 
+                paymentTypeModal?.addEventListener('click', (event) => {
+                    if (event.target === paymentTypeModal) {
+                        closePaymentTypeModal();
+                    }
+                });
+
                 document.addEventListener('keydown', (event) => {
-                    if (event.key === 'Escape' && paymentModal?.style.display === 'flex') {
-                        closePaymentModal();
+                    if (event.key === 'Escape') {
+                        if (paymentTypeModal?.style.display === 'flex') {
+                            closePaymentTypeModal();
+                        } else if (paymentModal?.style.display === 'flex') {
+                            closePaymentModal();
+                        }
                     }
                 });
 
@@ -907,7 +997,7 @@
                             return;
                         }
                         event.preventDefault();
-                        openPaymentModal();
+                        openPaymentTypeModal();
                         return;
                     }
                     event.preventDefault();
