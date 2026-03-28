@@ -286,7 +286,10 @@
                     </div>
                     <div>
                         <label for="invoice-receive-amount">Recieve Amount</label>
-                        <input id="invoice-receive-amount" type="number" min="0" step="0.01" placeholder="0.00" autocomplete="off">
+                        <div style="display: flex; gap: 6px; align-items: stretch;">
+                            <input id="invoice-receive-amount" type="number" min="0" step="0.01" placeholder="0.00" autocomplete="off" style="flex: 1; min-width: 0;">
+                            <button type="button" id="invoice-receive-max-btn" style="padding: 6px 14px; border: 1px solid #ccc; background: #f0f0f0; border-radius: 6px; font-weight: 600; cursor: pointer; white-space: nowrap;">Max</button>
+                        </div>
                         <div id="invoice-receive-over-warning" style="display: none; color: #d32f2f; font-size: 0.88rem; margin-top: 4px; font-weight: 600;">Received amount cannot exceed the invoice amount for QR payment.</div>
                     </div>
                     <div class="actions" id="invoice-payment-debt-row" style="justify-content: space-between; align-items: baseline;">
@@ -419,6 +422,7 @@
                 const paymentTypeQrBtn = document.getElementById('payment-type-qr');
                 const paymentTypeInput = document.getElementById('invoice-payment-type-input');
                 const receiveOverWarning = document.getElementById('invoice-receive-over-warning');
+                const receiveMaxBtn = document.getElementById('invoice-receive-max-btn');
                 const baseSubtotal = Number(@json($subtotal));
                 const baseDiscountRate = Number(@json($discountRate));
 
@@ -618,6 +622,16 @@
                 receiveAmountInput?.addEventListener('input', () => {
                     updateDebtPreview();
                     validateQrReceiveAmount();
+                });
+
+                receiveMaxBtn?.addEventListener('click', () => {
+                    if (receiveAmountInput) {
+                        const maxAmount = roundMoney(latestGrandTotal * selectedCurrencyRate());
+                        receiveAmountInput.value = maxAmount.toFixed(2);
+                        updateDebtPreview();
+                        validateQrReceiveAmount();
+                        receiveAmountInput.focus();
+                    }
                 });
 
                 paymentCurrencySelect?.addEventListener('change', () => {
