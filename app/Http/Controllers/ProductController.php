@@ -74,8 +74,8 @@ class ProductController extends Controller
                 ->count(),
         ];
 
-        $alertStocks = $conn->table('ALERT_STOCKS as a')
-            ->join('PRODUCTS as p', 'p.PRODUCT_NO', '=', 'a.PRODUCT_NO')
+        $alertStocks = $conn->table('PRODUCTS as p')
+            ->leftJoin('ALERT_STOCKS as a', 'a.PRODUCT_NO', '=', 'p.PRODUCT_NO')
             ->leftJoin('PRODUCT_TYPE as t', 't.PRODUCTTYPE_ID', '=', 'p.PRODUCT_TYPE')
             ->selectRaw('
                 a.ALERT_STOCK_NO as alert_stock_no,
@@ -99,7 +99,7 @@ class ProductController extends Controller
                    AND pp2.PHOTO_ID = (SELECT MIN(pp3.PHOTO_ID) FROM PRODUCT_PHOTO pp3 WHERE pp3.PRODUCT_ID = p.PRODUCT_NO)
                 ) as photo_path
             ')
-            ->orderBy('p.QTY_ON_HAND')
+            ->orderBy('p.PRODUCT_NAME')
             ->get();
 
         return view('products.index', [
@@ -806,7 +806,7 @@ class ProductController extends Controller
         return back()->with('success', 'Product type updated.');
     }
 
-    public function updateAlertStock(Request $request, int $alertStockNo): RedirectResponse
+    public function updateAlertStock(Request $request, int $alertStockNo): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'lower_qty' => ['required', 'integer', 'min:0'],
@@ -816,6 +816,7 @@ class ProductController extends Controller
         $lower = (int) $validated['lower_qty'];
         $higher = (int) $validated['higher_qty'];
         if ($higher < $lower) {
+            if ($request->ajax()) return response()->json(['error' => 'Higher quantity must be >= lower quantity.'], 422);
             return back()->with('error', 'Higher quantity must be greater than or equal to lower quantity.');
         }
 
@@ -828,13 +829,59 @@ class ProductController extends Controller
                     'HIGHER_QTY' => $higher,
                 ]);
         } catch (QueryException $e) {
+            if ($request->ajax()) return response()->json(['error' => 'Failed to update alert stock: '.$e->getMessage()], 500);
             return back()->with('error', 'Failed to update alert stock: '.$e->getMessage());
         }
 
         if ($updated === 0) {
+            if ($request->ajax()) return response()->json(['error' => 'Alert stock record not found.'], 404);
             return back()->with('error', 'Alert stock record not found.');
         }
 
+        if ($request->ajax()) return response()->json(['success' => true, 'lower_qty' => $lower, 'higher_qty' => $higher]);
         return back()->with('success', 'Alert stock updated.');
+    }
+
+    public function storeAlertStock(Request $request): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validate([
+            'product_no' => ['required', 'string'],
+            'lower_qty' => ['required', 'integer', 'min:0'],
+            'higher_qty' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $lower = (int) $validated['lower_qty'];
+        $higher = (int) $validated['higher_qty'];
+        if ($higher < $lower) {
+            if ($request->ajax()) return response()->json(['error' => 'Higher quantity must be >= lower quantity.'], 422);
+            return back()->with('error', 'Higher quantity must be greater than or equal to lower quantity.');
+        }
+
+        $exists = DB::connection('oracle')
+            ->table('ALERT_STOCKS')
+            ->where('PRODUCT_NO', '=', $validated['product_no'])
+            ->exists();
+        if ($exists) {
+            if ($request->ajax()) return response()->json(['error' => 'Alert stock record already exists for this product.'], 422);
+            return back()->with('error', 'Alert stock record already exists for this product.');
+        }
+
+        try {
+            DB::connection('oracle')->insert(
+                'INSERT INTO ALERT_STOCKS (PRODUCT_NO, LOWER_QTY, HIGHER_QTY) VALUES (:product_no, :lower_qty, :higher_qty)',
+                ['product_no' => $validated['product_no'], 'lower_qty' => $lower, 'higher_qty' => $higher]
+            );
+        } catch (QueryException $e) {
+            if ($request->ajax()) return response()->json(['error' => 'Failed to create alert stock: '.$e->getMessage()], 500);
+            return back()->with('error', 'Failed to create alert stock: '.$e->getMessage());
+        }
+
+        $newId = (int) DB::connection('oracle')
+            ->table('ALERT_STOCKS')
+            ->where('PRODUCT_NO', '=', $validated['product_no'])
+            ->value('ALERT_STOCK_NO');
+
+        if ($request->ajax()) return response()->json(['success' => true, 'lower_qty' => $lower, 'higher_qty' => $higher, 'alert_stock_no' => $newId]);
+        return back()->with('success', 'Alert stock created.');
     }
 }

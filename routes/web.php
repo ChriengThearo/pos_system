@@ -263,6 +263,9 @@ Route::middleware('staff.auth')->group(function (): void {
     Route::patch('/products/{productNo}', [ProductController::class, 'update'])
         ->middleware('staff.ability:products.manage')
         ->name('products.update');
+    Route::post('/alert-stocks', [ProductController::class, 'storeAlertStock'])
+        ->middleware('staff.ability:stock-status.manage')
+        ->name('alert-stocks.store');
     Route::patch('/alert-stocks/{alertStockNo}', [ProductController::class, 'updateAlertStock'])
         ->middleware('staff.ability:stock-status.manage')
         ->name('alert-stocks.update');

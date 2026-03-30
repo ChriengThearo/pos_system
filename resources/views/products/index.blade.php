@@ -194,22 +194,26 @@
                                 $photoUrl = $isHttpPhoto
                                     ? $photoPath
                                     : ($isLocalPhoto ? asset(ltrim($photoPath, '/')) : '');
+                                $hasAlert = $alert->alert_stock_no !== null;
                                 $detailPayload = [
-                                    'alert_stock_no' => (int) $alert->alert_stock_no,
+                                    'alert_stock_no' => $hasAlert ? (int) $alert->alert_stock_no : null,
                                     'product_no' => (string) $alert->product_no,
                                     'product_name' => (string) $alert->product_name,
                                     'product_type_id' => (string) $alert->product_type_id,
                                     'sell_price' => (float) $alert->sell_price,
                                     'cost_price' => (float) $alert->cost_price,
                                     'profit_percent' => (float) $profitDisplay,
-                                    'lower_qty' => (float) $alert->lower_qty,
-                                    'higher_qty' => (float) $alert->higher_qty,
+                                    'lower_qty' => $hasAlert ? (float) $alert->lower_qty : null,
+                                    'higher_qty' => $hasAlert ? (float) $alert->higher_qty : null,
                                     'unit_measure' => (string) $alert->unit_measure,
                                     'stock_status' => (string) ($alert->stock_status ?? ''),
                                     'photo_url' => (string) $photoUrl,
                                 ];
                             @endphp
-                            <tr>
+                            <tr
+                                data-product-no="{{ $alert->product_no }}"
+                                data-alert-stock-no="{{ $hasAlert ? (int) $alert->alert_stock_no : '' }}"
+                            >
                                 <td>
                                     @if($photoUrl !== '')
                                         <img src="{{ $photoUrl }}" alt="Product photo" style="width: 46px; height: 46px; border-radius: 10px; object-fit: cover;">
@@ -218,8 +222,26 @@
                                     @endif
                                 </td>
                                 <td>{{ $alert->product_name }}</td>
-                                <td style="text-align: right;">{{ number_format((float) $alert->lower_qty) }}</td>
-                                <td style="text-align: right;">{{ number_format((float) $alert->higher_qty) }}</td>
+                                <td style="text-align: right;">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        class="alert-inline-lower"
+                                        value="{{ $hasAlert ? (int) $alert->lower_qty : '' }}"
+                                        placeholder="-"
+                                        style="width: 90px; text-align: right;"
+                                    >
+                                </td>
+                                <td style="text-align: right;">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        class="alert-inline-higher"
+                                        value="{{ $hasAlert ? (int) $alert->higher_qty : '' }}"
+                                        placeholder="-"
+                                        style="width: 90px; text-align: right;"
+                                    >
+                                </td>
                                 <td>
                                     <button
                                         type="button"
@@ -228,6 +250,13 @@
                                         data-product='@json($detailPayload)'
                                     >
                                         Detail
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary js-alert-inline-save"
+                                        style="display: none;"
+                                    >
+                                        Save
                                     </button>
                                 </td>
                             </tr>
@@ -288,7 +317,10 @@
                     <label for="profit_percent">Profit %</label>
                     <input id="profit_percent" name="profit_percent" type="number" step="0.01" min="0" value="0" readonly required>
                 </div>
-                <input id="qty_on_hand" name="qty_on_hand" type="hidden" value="0">
+                <div>
+                    <label for="qty_on_hand">Qty on Hand</label>
+                    <input id="qty_on_hand" name="qty_on_hand" type="number" min="0" value="0" required>
+                </div>
                 <input id="status" name="status" type="hidden" value="">
                 <div class="actions" style="align-items: end;">
                     <button type="submit" class="btn btn-primary">Create</button>
@@ -397,10 +429,12 @@
                     id="alert-stock-form"
                     method="POST"
                     data-update-template="{{ route('alert-stocks.update', ['alertStockNo' => '__ALERT__']) }}"
+                    data-store-url="{{ route('alert-stocks.store') }}"
                     style="margin-top: 12px;"
                 >
                     @csrf
-                    @method('PATCH')
+                    <input type="hidden" name="_method" id="alert-form-method" value="PATCH">
+                    <input type="hidden" name="product_no" id="alert-form-product-no" value="">
                     <div class="actions">
                         <button type="submit" class="btn btn-primary">Save Change</button>
                         <button type="button" class="btn btn-muted" id="close-alert-detail">Cancel</button>
@@ -470,7 +504,7 @@
                     </div>
                     <div>
                         <label for="detail-qty">Stock (Pieces)</label>
-                        <input id="detail-qty" name="qty_on_hand" type="number" min="0" readonly>
+                        <input id="detail-qty" name="qty_on_hand" type="number" min="0" required>
                     </div>
                     <div>
                         <label for="detail-unit">Unit Measure</label>
@@ -522,6 +556,8 @@
             let carouselIndex = 0;
             let currentProductNo = '';
             let currentRowThumbnail = null; // <img> in the product list row that opened the modal
+            let currentAlertRow = null;     // <tr> in the alert stock table that opened the modal
+            let currentAlertButton = null;  // the Detail button that opened the alert modal
 
             function showCarouselPhoto(index) {
                 if (!detailPhoto || !detailPhotoEmpty) return;
@@ -676,6 +712,8 @@
                     const productNo = data.product_no || '';
                     currentProductNo = productNo;
                     currentRowThumbnail = button.closest('tr')?.querySelector('img') || null;
+                    currentAlertRow = mode === 'alert' ? (button.closest('tr') || null) : null;
+                    currentAlertButton = mode === 'alert' ? button : null;
                     if (detailForm) {
                         detailForm.action = updateTemplate.replace('__PRODUCT__', encodeURIComponent(productNo));
                     }
@@ -732,6 +770,7 @@
                         }
                         if (showAlert) {
                             if (alertPhoto && alertPhotoEmpty) {
+                                const photoUrl = data.photo_url || '';
                                 if (photoUrl) {
                                     alertPhoto.src = photoUrl;
                                     alertPhoto.style.display = '';
@@ -746,9 +785,18 @@
                             if (alertLower) alertLower.value = data.lower_qty ?? '';
                             if (alertHigher) alertHigher.value = data.higher_qty ?? '';
                             if (alertForm) {
-                                const alertTemplate = alertForm.dataset.updateTemplate || '';
-                                const alertStockNo = data.alert_stock_no ?? '';
-                                alertForm.action = alertTemplate.replace('__ALERT__', encodeURIComponent(alertStockNo));
+                                const hasRecord = data.alert_stock_no !== null && data.alert_stock_no !== undefined;
+                                const methodInput = document.getElementById('alert-form-method');
+                                const productNoInput = document.getElementById('alert-form-product-no');
+                                if (hasRecord) {
+                                    const alertTemplate = alertForm.dataset.updateTemplate || '';
+                                    alertForm.action = alertTemplate.replace('__ALERT__', encodeURIComponent(data.alert_stock_no));
+                                    if (methodInput) methodInput.value = 'PATCH';
+                                } else {
+                                    alertForm.action = alertForm.dataset.storeUrl || '';
+                                    if (methodInput) methodInput.value = '';
+                                }
+                                if (productNoInput) productNoInput.value = data.product_no || '';
                             }
                         }
                     }
@@ -771,6 +819,45 @@
                 });
             }
 
+            if (alertForm) {
+                alertForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const fd = new FormData(alertForm);
+                    const csrf = document.querySelector('input[name="_token"]')?.value || '';
+                    fetch(alertForm.action, {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+                        body: fd,
+                    })
+                        .then(r => r.json().then(json => ({ ok: r.ok, json })))
+                        .then(({ ok, json }) => {
+                            if (!ok) { alert(json.error || 'Failed to save.'); return; }
+                            // Update the inline inputs in the row so they match the saved values
+                            if (currentAlertRow) {
+                                const rowLower  = currentAlertRow.querySelector('.alert-inline-lower');
+                                const rowHigher = currentAlertRow.querySelector('.alert-inline-higher');
+                                if (rowLower)  { rowLower.value  = json.lower_qty;  rowLower.dataset.committed  = String(json.lower_qty); }
+                                if (rowHigher) { rowHigher.value = json.higher_qty; rowHigher.dataset.committed = String(json.higher_qty); }
+                                if (currentAlertRow.dataset.alertStockNo === '' && json.alert_stock_no) {
+                                    currentAlertRow.dataset.alertStockNo = json.alert_stock_no;
+                                }
+                            }
+                            // Sync data-product on the button so next open shows fresh values
+                            if (currentAlertButton) {
+                                try {
+                                    const payload = JSON.parse(currentAlertButton.getAttribute('data-product') || '{}');
+                                    payload.lower_qty = json.lower_qty;
+                                    payload.higher_qty = json.higher_qty;
+                                    if (json.alert_stock_no) payload.alert_stock_no = json.alert_stock_no;
+                                    currentAlertButton.setAttribute('data-product', JSON.stringify(payload));
+                                } catch (_) {}
+                            }
+                            if (detailModal) detailModal.style.display = 'none';
+                        })
+                        .catch(() => alert('Failed to save.'));
+                });
+            }
+
             if (detailModal) {
                 detailModal.addEventListener('click', (event) => {
                     if (event.target === detailModal) {
@@ -778,6 +865,97 @@
                     }
                 });
             }
+
+            // Inline alert stock editing
+            document.querySelectorAll('#alert-stocks-panel tbody tr').forEach(row => {
+                const lowerInput  = row.querySelector('.alert-inline-lower');
+                const higherInput = row.querySelector('.alert-inline-higher');
+                const detailBtn   = row.querySelector('.js-product-detail');
+                const saveBtn     = row.querySelector('.js-alert-inline-save');
+                if (!lowerInput || !higherInput || !saveBtn) return;
+
+                // Tracks the last saved/committed values — stored on the element so modal save can update them
+                lowerInput.dataset.committed  = lowerInput.value;
+                higherInput.dataset.committed = higherInput.value;
+
+                const cancel = () => {
+                    lowerInput.value  = lowerInput.dataset.committed;
+                    higherInput.value = higherInput.dataset.committed;
+                    if (detailBtn) detailBtn.style.display = '';
+                    saveBtn.style.display = 'none';
+                };
+
+                const markDirty = () => {
+                    const dirty = lowerInput.value !== lowerInput.dataset.committed || higherInput.value !== higherInput.dataset.committed;
+                    if (detailBtn) detailBtn.style.display = dirty ? 'none' : '';
+                    saveBtn.style.display = dirty ? '' : 'none';
+                };
+
+                lowerInput.addEventListener('input', markDirty);
+                higherInput.addEventListener('input', markDirty);
+
+                // Cancel immediately when user clicks outside this row
+                document.addEventListener('mousedown', (e) => {
+                    if (saveBtn.style.display !== 'none' && !row.contains(e.target)) {
+                        cancel();
+                    }
+                });
+
+                saveBtn.addEventListener('click', () => {
+                    const productNo    = row.dataset.productNo || '';
+                    const alertStockNo = row.dataset.alertStockNo || '';
+                    const lower  = parseInt(lowerInput.value, 10);
+                    const higher = parseInt(higherInput.value, 10);
+                    if (isNaN(lower) || isNaN(higher)) { alert('Please enter valid numbers.'); return; }
+                    if (higher < lower) { alert('Higher Qty must be >= Lower Qty.'); return; }
+
+                    const csrf = document.querySelector('input[name="_token"]')?.value || '';
+                    const isNew = alertStockNo === '';
+                    const url = isNew
+                        ? '{{ route('alert-stocks.store') }}'
+                        : `/alert-stocks/${encodeURIComponent(alertStockNo)}`;
+
+                    const fd = new FormData();
+                    fd.append('_token', csrf);
+                    if (!isNew) fd.append('_method', 'PATCH');
+                    if (isNew)  fd.append('product_no', productNo);
+                    fd.append('lower_qty',  lower);
+                    fd.append('higher_qty', higher);
+
+                    saveBtn.disabled = true;
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+                        body: fd,
+                    })
+                        .then(r => r.json().then(json => ({ ok: r.ok, json })))
+                        .then(({ ok, json }) => {
+                            if (!ok) { alert(json.error || 'Failed to save.'); return; }
+                            // Update committed values so cancel reverts to the new saved state
+                            lowerInput.dataset.committed  = String(json.lower_qty);
+                            higherInput.dataset.committed = String(json.higher_qty);
+                            lowerInput.value  = String(json.lower_qty);
+                            higherInput.value = String(json.higher_qty);
+                            // Sync data-product on the Detail button so modal shows fresh values
+                            if (detailBtn) {
+                                try {
+                                    const p = JSON.parse(detailBtn.getAttribute('data-product') || '{}');
+                                    p.lower_qty = json.lower_qty;
+                                    p.higher_qty = json.higher_qty;
+                                    if (json.alert_stock_no) {
+                                        p.alert_stock_no = json.alert_stock_no;
+                                        row.dataset.alertStockNo = json.alert_stock_no;
+                                    }
+                                    detailBtn.setAttribute('data-product', JSON.stringify(p));
+                                } catch (_) {}
+                                detailBtn.style.display = '';
+                            }
+                            saveBtn.style.display = 'none';
+                        })
+                        .catch(() => alert('Failed to save.'))
+                        .finally(() => { saveBtn.disabled = false; });
+                });
+            });
 
             const addPhotoInput = document.getElementById('product_photo');
             const addPhotoFilename = document.getElementById('add-photo-filename');
