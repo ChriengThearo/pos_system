@@ -167,6 +167,9 @@ Route::middleware('staff.auth')->group(function (): void {
     Route::get('/total-sales', [EcommerceController::class, 'totalSales'])
         ->middleware('staff.ability:total-sales.read')
         ->name('total-sales.index');
+    Route::get('/invoices/products', [EcommerceController::class, 'invoiceProductCatalog'])
+        ->middleware('staff.ability:invoices.read')
+        ->name('invoices.products');
     Route::get('/invoices', [EcommerceController::class, 'invoices'])
         ->middleware('staff.ability:invoices.read')
         ->name('invoices.index');

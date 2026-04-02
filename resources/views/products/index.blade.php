@@ -115,7 +115,15 @@
                         <tr data-type-id="{{ $product->product_type_id }}">
                             <td>
                                 @if($photoUrl !== '')
-                                    <img src="{{ $photoUrl }}" alt="Product photo" style="width: 46px; height: 46px; border-radius: 10px; object-fit: cover;">
+                                    <div class="row-photo-carousel" data-product-no="{{ $product->product_no }}" style="display: flex; align-items: center; gap: 2px;">
+                                        <button type="button" class="row-photo-prev" style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 1px; line-height: 0; flex-shrink: 0;">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                                        </button>
+                                        <img src="{{ $photoUrl }}" class="row-photo-img" alt="Product photo" style="width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex-shrink: 0;">
+                                        <button type="button" class="row-photo-next" style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 1px; line-height: 0; flex-shrink: 0;">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                                        </button>
+                                    </div>
                                 @else
                                     <span class="subtle">No photo</span>
                                 @endif
@@ -211,7 +219,15 @@
                             >
                                 <td>
                                     @if($photoUrl !== '')
-                                        <img src="{{ $photoUrl }}" alt="Product photo" style="width: 46px; height: 46px; border-radius: 10px; object-fit: cover;">
+                                        <div class="row-photo-carousel" data-product-no="{{ $alert->product_no }}" style="display: flex; align-items: center; gap: 2px;">
+                                            <button type="button" class="row-photo-prev" style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 1px; line-height: 0; flex-shrink: 0;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                                            </button>
+                                            <img src="{{ $photoUrl }}" class="row-photo-img" alt="Product photo" style="width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex-shrink: 0;">
+                                            <button type="button" class="row-photo-next" style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 1px; line-height: 0; flex-shrink: 0;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                                            </button>
+                                        </div>
                                     @else
                                         <span class="subtle">No photo</span>
                                     @endif
@@ -487,12 +503,16 @@
                     <div style="grid-column: 1 / -1;">
                         <label>Photo</label>
                         <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
-                            <button type="button" id="carousel-prev" class="btn btn-muted" style="flex-shrink: 0; font-size: 1.6em; padding: 6px 16px; line-height: 1; display: none;">&#8249;</button>
+                            <button type="button" id="carousel-prev" class="btn btn-muted" style="flex-shrink: 0; padding: 6px 10px; line-height: 0; display: none;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                            </button>
                             <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 240px; background: #f3f4f6; border-radius: 14px; overflow: hidden;">
                                 <img id="detail-product-photo" src="" alt="Product photo" style="max-width: 100%; max-height: 240px; object-fit: contain; display: none; border-radius: 14px;">
                                 <span class="subtle" id="detail-product-photo-empty">No photo</span>
                             </div>
-                            <button type="button" id="carousel-next" class="btn btn-muted" style="flex-shrink: 0; font-size: 1.6em; padding: 6px 16px; line-height: 1; display: none;">&#8250;</button>
+                            <button type="button" id="carousel-next" class="btn btn-muted" style="flex-shrink: 0; padding: 6px 10px; line-height: 0; display: none;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                            </button>
                         </div>
                         <div id="carousel-indicator" style="text-align: center; font-size: 0.82em; color: #888; margin-top: 5px;"></div>
                         <div id="carousel-photo-actions" style="display: none; justify-content: center; gap: 8px; margin-top: 8px;">
@@ -1032,7 +1052,11 @@
 
             function buildRow(p) {
                 const photoCell = p.photo_url
-                    ? `<img src="${p.photo_url}" alt="Product photo" style="width:46px;height:46px;border-radius:10px;object-fit:cover;">`
+                    ? `<div class="row-photo-carousel" data-product-no="${escHtml(String(p.product_no||''))}" style="display:flex;align-items:center;gap:2px;">
+                        <button type="button" class="row-photo-prev" style="background:none;border:none;cursor:pointer;color:#6b7280;padding:1px;line-height:0;flex-shrink:0;"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg></button>
+                        <img src="${escHtml(p.photo_url)}" class="row-photo-img" alt="Product photo" style="width:46px;height:46px;border-radius:10px;object-fit:cover;flex-shrink:0;">
+                        <button type="button" class="row-photo-next" style="background:none;border:none;cursor:pointer;color:#6b7280;padding:1px;line-height:0;flex-shrink:0;"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg></button>
+                       </div>`
                     : `<span class="subtle">No photo</span>`;
                 const actionCell = p.can_manage
                     ? `<button type="button" class="btn btn-muted js-product-detail" data-product='${JSON.stringify(p).replace(/'/g,"&#39;")}'>Detail</button>`
@@ -1114,6 +1138,7 @@
                         } else {
                             productTableBody.innerHTML = products.map(buildRow).join('');
                             attachDetailListeners();
+                            setupRowCarousels();
                         }
                         if (productTotalChip) productTotalChip.textContent = `${total} total`;
                         if (productPager) productPager.innerHTML = pagination;
@@ -1442,6 +1467,64 @@
                     });
                 });
             }
+
+            // --- Row photo mini-carousel ---
+            function setupRowCarousels() {
+                document.querySelectorAll('.row-photo-carousel:not([data-carousel-init])').forEach(wrapper => {
+                    wrapper.setAttribute('data-carousel-init', '1');
+                    const img = wrapper.querySelector('.row-photo-img');
+                    const prevBtn = wrapper.querySelector('.row-photo-prev');
+                    const nextBtn = wrapper.querySelector('.row-photo-next');
+                    if (!img || !prevBtn || !nextBtn) return;
+
+                    let photos = img.src ? [{ photo_id: 0, url: img.src }] : [];
+                    let idx = 0;
+                    let loaded = false;
+
+                    async function loadPhotos() {
+                        if (loaded) return;
+                        loaded = true;
+                        const productNo = wrapper.dataset.productNo;
+                        try {
+                            const resp = await fetch(`/products/${encodeURIComponent(productNo)}/photos`, {
+                                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                            });
+                            if (resp.ok) {
+                                const json = await resp.json();
+                                if (json && Array.isArray(json.photos) && json.photos.length > 0) {
+                                    photos = json.photos;
+                                    const curUrl = img.src;
+                                    const match = photos.findIndex(p => p.url === curUrl);
+                                    idx = match >= 0 ? match : 0;
+                                }
+                            }
+                        } catch (_) {}
+                        if (photos.length <= 1) {
+                            prevBtn.style.visibility = 'hidden';
+                            nextBtn.style.visibility = 'hidden';
+                        }
+                    }
+
+                    function showPhoto(i) {
+                        if (photos.length === 0) return;
+                        idx = ((i % photos.length) + photos.length) % photos.length;
+                        img.src = photos[idx].url;
+                    }
+
+                    prevBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        await loadPhotos();
+                        if (photos.length > 1) showPhoto(idx - 1);
+                    });
+                    nextBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        await loadPhotos();
+                        if (photos.length > 1) showPhoto(idx + 1);
+                    });
+                });
+            }
+            setupRowCarousels();
+            // --- end row photo mini-carousel ---
 
             // Bind existing rows
             document.querySelectorAll('#product-types-tbody tr[data-id]').forEach(tr => bindTypeRow(tr));

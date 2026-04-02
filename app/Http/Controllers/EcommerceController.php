@@ -800,6 +800,69 @@ class EcommerceController extends Controller
         ]);
     }
 
+    public function invoiceProductCatalog(Request $request): JsonResponse
+    {
+        $q    = trim((string) $request->query('q', ''));
+        $type = trim((string) $request->query('type', ''));
+
+        $query = $this->db()
+            ->table('PRODUCTS as p')
+            ->leftJoin('PRODUCT_TYPE as t', 't.PRODUCTTYPE_ID', '=', 'p.PRODUCT_TYPE')
+            ->selectRaw("
+                p.PRODUCT_NO as product_no,
+                p.PRODUCT_NAME as product_name,
+                p.SELL_PRICE as sell_price,
+                p.QTY_ON_HAND as qty_on_hand,
+                p.PRODUCT_TYPE as product_type_id,
+                t.PRODUCTYPE_NAME as product_type_name,
+                (SELECT CASE WHEN pp2.MEDIA IS NOT NULL AND DBMS_LOB.GETLENGTH(pp2.MEDIA) <= 2000
+                    THEN UTL_RAW.CAST_TO_VARCHAR2(DBMS_LOB.SUBSTR(pp2.MEDIA, 2000, 1))
+                    ELSE NULL END
+                 FROM PRODUCT_PHOTO pp2
+                 WHERE pp2.PRODUCT_ID = p.PRODUCT_NO
+                   AND pp2.PHOTO_ID = (SELECT MIN(pp3.PHOTO_ID) FROM PRODUCT_PHOTO pp3 WHERE pp3.PRODUCT_ID = p.PRODUCT_NO)
+                ) as photo_path
+            ");
+
+        if ($q !== '') {
+            $keyword = '%' . mb_strtoupper($q) . '%';
+            $query->where(function ($sub) use ($keyword): void {
+                $sub->whereRaw('UPPER(p.PRODUCT_NAME) LIKE ?', [$keyword])
+                    ->orWhereRaw('UPPER(p.PRODUCT_NO) LIKE ?', [$keyword]);
+            });
+        }
+
+        if ($type !== '' && ctype_digit($type)) {
+            $query->where('p.PRODUCT_TYPE', '=', (int) $type);
+        }
+
+        $products = $query
+            ->orderBy('p.PRODUCT_NAME')
+            ->limit(80)
+            ->get();
+
+        return response()->json([
+            'products' => $products->map(function (object $p): array {
+                $photoPath = trim((string) ($p->photo_path ?? ''));
+                $photoUrl  = null;
+                if ($photoPath !== '') {
+                    $photoUrl = str_starts_with($photoPath, 'http://') || str_starts_with($photoPath, 'https://')
+                        ? $photoPath
+                        : asset(ltrim($photoPath, '/'));
+                }
+                return [
+                    'product_no'        => (string) ($p->product_no ?? ''),
+                    'product_name'      => (string) ($p->product_name ?? ''),
+                    'sell_price'        => round((float) ($p->sell_price ?? 0), 2),
+                    'qty_on_hand'       => (int) ($p->qty_on_hand ?? 0),
+                    'product_type_id'   => $p->product_type_id,
+                    'product_type_name' => (string) ($p->product_type_name ?? ''),
+                    'photo_url'         => $photoUrl,
+                ];
+            })->values(),
+        ]);
+    }
+
     public function invoices(Request $request): View
     {
         $conn = $this->db();
@@ -812,6 +875,11 @@ class EcommerceController extends Controller
         $products = $conn->table('PRODUCTS')
             ->selectRaw('PRODUCT_NO as product_no, PRODUCT_NAME as product_name, QTY_ON_HAND as qty_on_hand')
             ->orderBy('PRODUCT_NAME')
+            ->get();
+
+        $types = $conn->table('PRODUCT_TYPE')
+            ->selectRaw('PRODUCTTYPE_ID as id, PRODUCTYPE_NAME as name')
+            ->orderBy('PRODUCTYPE_NAME')
             ->get();
 
         $clients = $conn->table('CLIENTS')
@@ -842,6 +910,7 @@ class EcommerceController extends Controller
             'selectedInvoiceNo' => $selected !== null && $selected !== '' ? (int) $selected : null,
             'order' => $order,
             'products' => $products,
+            'types' => $types,
             'clients' => $clients,
             'paymentCurrencies' => $paymentCurrencies,
             'defaultPaymentCurrency' => $defaultPaymentCurrency,
