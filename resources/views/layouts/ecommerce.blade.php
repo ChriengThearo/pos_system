@@ -251,7 +251,7 @@
             align-items: center;
             justify-content: space-between;
             gap: 16px;
-            animation: hero-rise .6s ease;
+            animation: hero-rise .15s ease;
         }
 
         .page-hero::after {
@@ -398,7 +398,7 @@
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            animation: toast-pop 0.35s ease-out;
+            animation: toast-pop 0.18s ease-out;
         }
 
         .flash.toast .toast-ico {
@@ -432,7 +432,7 @@
             font-weight: 700;
             font-size: .9rem;
             cursor: pointer;
-            transition: all .2s ease;
+            transition: background-color .12s, opacity .12s;
         }
 
         .btn:disabled {
@@ -445,7 +445,7 @@
             background: linear-gradient(140deg, var(--primary), #0070d2);
         }
 
-        .btn-primary:hover { transform: translateY(-1px); }
+        .btn-primary:hover { opacity: .88; }
 
         .btn-muted {
             color: var(--text);
@@ -632,7 +632,7 @@
             padding: 16px;
             z-index: 9999;
             opacity: 0;
-            animation: stock-alert-fade 0.25s ease forwards;
+            animation: stock-alert-fade 0.15s ease forwards;
         }
 
         .stock-alert-card {
@@ -642,7 +642,7 @@
             background: #ffffff;
             box-shadow: var(--shadow);
             padding: 18px;
-            animation: stock-alert-rise 0.3s ease;
+            animation: stock-alert-rise 0.15s ease;
         }
 
         .stock-alert-title {

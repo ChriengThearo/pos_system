@@ -115,7 +115,7 @@
         font-weight: 600;
         cursor: pointer;
         font-family: inherit;
-        transition: all .15s;
+        transition: border-color .12s, color .12s, background-color .12s;
         color: var(--text);
         display: inline-flex;
         align-items: center;
@@ -144,7 +144,7 @@
         border-radius: 14px;
         padding: 10px;
         cursor: pointer;
-        transition: border-color .15s, box-shadow .15s, transform .15s;
+        transition: border-color .12s, box-shadow .12s;
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -152,10 +152,8 @@
     }
     .pos-card:hover {
         border-color: var(--accent);
-        box-shadow: 0 4px 14px rgba(227,100,20,.13);
-        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(227,100,20,.12);
     }
-    .pos-card:active { transform: translateY(0); }
     .pos-card.oos { opacity: .45; cursor: not-allowed; transform: none !important; box-shadow: none !important; border-color: var(--border) !important; }
 
     .pos-card-img {
@@ -315,7 +313,7 @@
         font-size: .92rem; font-weight: 700;
         cursor: pointer;
         display: flex; align-items: center; justify-content: center;
-        transition: all .12s;
+        transition: background-color .1s, border-color .1s, color .1s;
         line-height: 1;
         font-family: inherit;
     }
