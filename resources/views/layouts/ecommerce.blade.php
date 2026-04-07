@@ -442,7 +442,7 @@
 
         .btn-primary {
             color: #fff;
-            background: linear-gradient(140deg, var(--primary), #0070d2);
+            background: var(--accent);
         }
 
         .btn-primary:hover { opacity: .88; }

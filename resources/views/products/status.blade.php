@@ -104,7 +104,7 @@
         }
 
         .status-hero-actions .btn-primary {
-            background: linear-gradient(140deg, #f4a53f, #e87f1f);
+            background: var(--accent);
             box-shadow: 0 12px 24px rgba(48, 20, 0, 0.25);
         }
 

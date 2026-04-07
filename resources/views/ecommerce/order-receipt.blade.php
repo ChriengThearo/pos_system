@@ -227,7 +227,7 @@
         .btn.primary {
             border-color: transparent;
             color: #fff;
-            background: linear-gradient(140deg, var(--primary), #0070d2);
+            background: var(--accent);
         }
 
         .no-print { display: block; }
