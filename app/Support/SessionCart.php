@@ -42,7 +42,7 @@ class SessionCart
             'product_no' => $productNo,
             'product_name' => (string) ($product['product_name'] ?? ''),
             'product_type_name' => (string) ($product['product_type_name'] ?? ''),
-            'unit_measure' => (string) ($product['unit_measure'] ?? ''),
+            'unit_measure' => (string) ($product['measure_name'] ?? $product['unit_measure'] ?? ''),
             'sell_price' => (float) ($product['sell_price'] ?? 0),
             'qty' => $currentQty + $qty,
         ];

@@ -108,6 +108,7 @@
                                 'profit_percent' => (float) $profitDisplay,
                                 'qty_on_hand' => (int) $product->qty_on_hand,
                                 'unit_measure' => (string) $product->unit_measure,
+                                'measure_name' => (string) ($product->measure_name ?? ''),
                                 'stock_status' => (string) ($product->stock_status ?? ''),
                                 'photo_url' => (string) $photoUrl,
                             ];
@@ -136,7 +137,7 @@
                                 <div class="subtle">Profit: {{ number_format($profitDisplay, 2) }}%</div>
                             </td>
                             <td>
-                                {{ $product->qty_on_hand }} Pieces
+                                {{ $product->qty_on_hand }} {{ $product->measure_name ?? 'Pieces' }}
                             </td>
                             <td>{{ $product->stock_status ?? 'N/A' }}</td>
                             <td>
@@ -209,6 +210,7 @@
                                     'lower_qty' => $hasAlert ? (float) $alert->lower_qty : null,
                                     'higher_qty' => $hasAlert ? (float) $alert->higher_qty : null,
                                     'unit_measure' => (string) $alert->unit_measure,
+                                    'measure_name' => (string) ($alert->measure_name ?? ''),
                                     'stock_status' => (string) ($alert->stock_status ?? ''),
                                     'photo_url' => (string) $photoUrl,
                                 ];
@@ -315,7 +317,11 @@
                 </div>
                 <div>
                     <label for="unit_measure">Unit Measure</label>
-                    <input id="unit_measure" name="unit_measure" type="text" value="PCS" required>
+                    <select id="unit_measure" name="unit_measure" required>
+                        @foreach($measures as $measure)
+                            <option value="{{ $measure->id }}">{{ $measure->name }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div>
                     <label for="sell_price">Sell Price</label>
@@ -559,7 +565,11 @@
                     </div>
                     <div>
                         <label for="detail-unit">Unit Measure</label>
-                        <input id="detail-unit" name="unit_measure" type="text" readonly>
+                        <select id="detail-unit" name="unit_measure" required>
+                            @foreach($measures as $measure)
+                                <option value="{{ $measure->id }}">{{ $measure->name }}</option>
+                            @endforeach
+                        </select>
                     </div>
                     <div>
                         <label for="detail-status">Status</label>
@@ -1073,7 +1083,7 @@
                         <div class="subtle">Cost Price: $${costPrice.toFixed(2)}</div>
                         <div class="subtle">Profit: ${profitPct.toFixed(2)}%</div>
                     </td>
-                    <td>${parseInt(p.qty_on_hand) || 0} Pieces</td>
+                    <td>${parseInt(p.qty_on_hand) || 0} ${escHtml(p.measure_name || 'Pieces')}</td>
                     <td>${escHtml(p.stock_status || 'N/A')}</td>
                     <td>${actionCell}</td>
                 </tr>`;
@@ -1189,9 +1199,9 @@
                             // Set next product code
                             const codeInput = document.getElementById('product_no');
                             if (codeInput && json.next_product_code) codeInput.value = json.next_product_code;
-                            // Restore unit measure default
+                            // Restore unit measure default (select first option)
                             const unitInput = document.getElementById('unit_measure');
-                            if (unitInput) unitInput.value = 'PCS';
+                            if (unitInput && unitInput.options.length > 0) unitInput.selectedIndex = 0;
                             // Clear photo filename
                             const addFilename = document.getElementById('add-photo-filename');
                             if (addFilename) addFilename.textContent = '';

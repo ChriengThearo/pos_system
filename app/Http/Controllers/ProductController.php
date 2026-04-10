@@ -28,6 +28,7 @@ class ProductController extends Controller
                 p.COST_PRICE as cost_price,
                 p.PROFIT_PERCENT as profit_percent,
                 p.UNIT_MEASURE as unit_measure,
+                m.MEASURE_NAME as measure_name,
                 p.QTY_ON_HAND as qty_on_hand,
                 p.STATUS as stock_status,
                 (SELECT CASE WHEN pp2.MEDIA IS NOT NULL AND DBMS_LOB.GETLENGTH(pp2.MEDIA) <= 2000
@@ -40,6 +41,7 @@ class ProductController extends Controller
 
         $productsQuery = $conn->table('PRODUCTS as p')
             ->leftJoin('PRODUCT_TYPE as t', 't.PRODUCTTYPE_ID', '=', 'p.PRODUCT_TYPE')
+            ->leftJoin('PRODUCT_MEASURE as m', 'm.MEASURE_ID', '=', 'p.UNIT_MEASURE')
             ->selectRaw($select);
 
         if ($q !== '') {
@@ -83,6 +85,7 @@ class ProductController extends Controller
                     'profit_percent'   => (float) $profitDisplay,
                     'qty_on_hand'      => (int) $product->qty_on_hand,
                     'unit_measure'     => (string) $product->unit_measure,
+                    'measure_name'     => (string) ($product->measure_name ?? ''),
                     'stock_status'     => (string) ($product->stock_status ?? ''),
                     'photo_url'        => $photoUrl,
                     'can_manage'       => $canManageProducts,
@@ -101,6 +104,11 @@ class ProductController extends Controller
             ->orderBy('PRODUCTYPE_NAME')
             ->get();
 
+        $measures = $conn->table('PRODUCT_MEASURE')
+            ->selectRaw('MEASURE_ID as id, MEASURE_NAME as name')
+            ->orderBy('MEASURE_NAME')
+            ->get();
+
         $metrics = [
             'products' => (int) $conn->table('PRODUCTS')->count(),
             'types' => (int) $conn->table('PRODUCT_TYPE')->count(),
@@ -112,6 +120,7 @@ class ProductController extends Controller
         $alertStocks = $conn->table('PRODUCTS as p')
             ->leftJoin('ALERT_STOCKS as a', 'a.PRODUCT_NO', '=', 'p.PRODUCT_NO')
             ->leftJoin('PRODUCT_TYPE as t', 't.PRODUCTTYPE_ID', '=', 'p.PRODUCT_TYPE')
+            ->leftJoin('PRODUCT_MEASURE as m', 'm.MEASURE_ID', '=', 'p.UNIT_MEASURE')
             ->selectRaw('
                 a.ALERT_STOCK_NO as alert_stock_no,
                 p.PRODUCT_NO as product_no,
@@ -122,6 +131,7 @@ class ProductController extends Controller
                 p.COST_PRICE as cost_price,
                 p.PROFIT_PERCENT as profit_percent,
                 p.UNIT_MEASURE as unit_measure,
+                m.MEASURE_NAME as measure_name,
                 p.QTY_ON_HAND as qty_on_hand,
                 a.LOWER_QTY as lower_qty,
                 a.HIGHER_QTY as higher_qty,
@@ -150,6 +160,7 @@ class ProductController extends Controller
         return view('products.index', [
             'products' => $products,
             'types' => $types,
+            'measures' => $measures,
             'metrics' => $metrics,
             'alertStocks' => $alertStocks,
             'q' => $q,
@@ -669,7 +680,7 @@ class ProductController extends Controller
             'sell_price' => ['required', 'numeric', 'min:0'],
             'cost_price' => ['required', 'numeric', 'min:0'],
             'profit_percent' => ['required', 'numeric', 'min:0'],
-            'unit_measure' => ['required', 'string', 'max:20'],
+            'unit_measure' => ['required', 'integer'],
             'qty_on_hand' => ['required', 'integer', 'min:0'],
             'status' => ['nullable', 'string', 'max:20'],
             'photo' => ['nullable', 'image', 'max:4096'],
@@ -703,7 +714,7 @@ class ProductController extends Controller
                     'sell_price' => (float) $validated['sell_price'],
                     'cost_price' => (float) $validated['cost_price'],
                     'profit_percent' => (float) $validated['profit_percent'],
-                    'unit_measure' => (string) $validated['unit_measure'],
+                    'unit_measure' => (int) $validated['unit_measure'],
                     'qty_on_hand' => (int) $validated['qty_on_hand'],
                     'status' => $validated['status'] !== null && $validated['status'] !== ''
                         ? (string) $validated['status']
@@ -770,7 +781,7 @@ class ProductController extends Controller
             'sell_price' => ['required', 'numeric', 'min:0'],
             'cost_price' => ['required', 'numeric', 'min:0'],
             'profit_percent' => ['required', 'numeric', 'min:0'],
-            'unit_measure' => ['required', 'string', 'max:20'],
+            'unit_measure' => ['required', 'integer'],
             'qty_on_hand' => ['required', 'integer', 'min:0'],
             'status' => ['nullable', 'string', 'max:20'],
             'photo' => ['nullable', 'image', 'max:4096'],
@@ -800,7 +811,7 @@ class ProductController extends Controller
                     'SELL_PRICE' => (float) $validated['sell_price'],
                     'COST_PRICE' => (float) $validated['cost_price'],
                     'PROFIT_PERCENT' => (float) $validated['profit_percent'],
-                    'UNIT_MEASURE' => (string) $validated['unit_measure'],
+                    'UNIT_MEASURE' => (int) $validated['unit_measure'],
                     'QTY_ON_HAND' => (int) $validated['qty_on_hand'],
                     'STATUS' => $validated['status'] !== null && $validated['status'] !== ''
                         ? (string) $validated['status']

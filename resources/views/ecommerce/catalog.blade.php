@@ -85,7 +85,7 @@
                 <div class="subtle" style="margin-top: 10px;">
                     Cost: ${{ number_format((float) $product->cost_price, 2) }}<br>
                     Profit: {{ number_format($profitDisplay, 2) }}%<br>
-                    Unit: {{ $product->unit_measure }}
+                    Unit: {{ $product->measure_name ?? 'N/A' }}
                 </div>
 
                 @if($canManageCart)

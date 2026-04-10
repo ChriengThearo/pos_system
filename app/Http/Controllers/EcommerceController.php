@@ -112,6 +112,7 @@ class EcommerceController extends Controller
 
         $query = $conn->table('PRODUCTS as p')
             ->leftJoin('PRODUCT_TYPE as t', 't.PRODUCTTYPE_ID', '=', 'p.PRODUCT_TYPE')
+            ->leftJoin('PRODUCT_MEASURE as m', 'm.MEASURE_ID', '=', 'p.UNIT_MEASURE')
             ->selectRaw('
                 p.PRODUCT_NO as product_no,
                 p.PRODUCT_NAME as product_name,
@@ -121,6 +122,7 @@ class EcommerceController extends Controller
                 p.COST_PRICE as cost_price,
                 p.PROFIT_PERCENT as profit_percent,
                 p.UNIT_MEASURE as unit_measure,
+                m.MEASURE_NAME as measure_name,
                 p.QTY_ON_HAND as qty_on_hand,
                 p.STATUS as stock_status
             ');
@@ -2017,12 +2019,14 @@ class EcommerceController extends Controller
     {
         return $this->db()->table('PRODUCTS as p')
             ->leftJoin('PRODUCT_TYPE as t', 't.PRODUCTTYPE_ID', '=', 'p.PRODUCT_TYPE')
+            ->leftJoin('PRODUCT_MEASURE as m', 'm.MEASURE_ID', '=', 'p.UNIT_MEASURE')
             ->selectRaw('
                 p.PRODUCT_NO as product_no,
                 p.PRODUCT_NAME as product_name,
                 p.SELL_PRICE as sell_price,
                 p.QTY_ON_HAND as qty_on_hand,
                 p.UNIT_MEASURE as unit_measure,
+                m.MEASURE_NAME as measure_name,
                 t.PRODUCTYPE_NAME as product_type_name
             ')
             ->where('p.PRODUCT_NO', '=', $productNo)
@@ -2039,12 +2043,14 @@ class EcommerceController extends Controller
         $productNos = array_keys($sessionItems);
         $products = $this->db()->table('PRODUCTS as p')
             ->leftJoin('PRODUCT_TYPE as t', 't.PRODUCTTYPE_ID', '=', 'p.PRODUCT_TYPE')
+            ->leftJoin('PRODUCT_MEASURE as m', 'm.MEASURE_ID', '=', 'p.UNIT_MEASURE')
             ->selectRaw('
                 p.PRODUCT_NO as product_no,
                 p.PRODUCT_NAME as product_name,
                 p.SELL_PRICE as sell_price,
                 p.QTY_ON_HAND as qty_on_hand,
                 p.UNIT_MEASURE as unit_measure,
+                m.MEASURE_NAME as measure_name,
                 p.STATUS as stock_status,
                 t.PRODUCTYPE_NAME as product_type_name
             ')
@@ -2064,7 +2070,7 @@ class EcommerceController extends Controller
                     'product_no' => $productNo,
                     'product_name' => (string) ($product->product_name ?? $item['product_name'] ?? 'Unknown product'),
                     'product_type_name' => (string) ($product->product_type_name ?? $item['product_type_name'] ?? ''),
-                    'unit_measure' => (string) ($product->unit_measure ?? $item['unit_measure'] ?? ''),
+                    'unit_measure' => (string) ($product->measure_name ?? $item['unit_measure'] ?? ''),
                     'stock_status' => (string) ($product->stock_status ?? ''),
                     'qty' => $qty,
                     'available_stock' => $available,
