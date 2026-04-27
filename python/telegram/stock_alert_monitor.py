@@ -212,25 +212,16 @@ def format_number(value: float) -> str:
 
 
 def build_message(alert_name: str, rows: List[AlertRow], max_items: int) -> str:
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    lines = [
-        f"{alert_name} stock alert update",
-        f"Time: {now_str}",
-        f"Stock Alert: {len(rows)} products are running low on stock.",
-        f"Understock products: {len(rows)}",
-    ]
+    _ = alert_name  # kept for compatibility with existing call sites
+    lines = [f"Stock Alert: {len(rows)} products are running low on stock."]
 
     if not rows:
-        lines.append("No understock products found.")
         return "\n".join(lines)
 
     lines.append("")
     limited_rows = rows[:max_items]
     for index, row in enumerate(limited_rows, start=1):
-        lines.append(f"{index}. [UNDERSTOCK] {row.product_no} - {row.product_name}")
-        lines.append(
-            f"   Qty={format_number(row.qty_on_hand)}, Lower={format_number(row.lower_qty)}, Higher={format_number(row.higher_qty)}"
-        )
+        lines.append(f"{index}. {row.product_name} = {format_number(row.qty_on_hand)}")
     if len(rows) > len(limited_rows):
         lines.append(f"... and {len(rows) - len(limited_rows)} more item(s)")
     return "\n".join(lines)
