@@ -102,7 +102,7 @@ echo json_encode((array) $row);
 
 ## Khmer TTS Setup
 
-This project triggers `khmer_tts.py` after a successful Bakong payment.
+This project triggers `python/system_speech/khmer_tts.py` after a successful Bakong payment.
 
 Install Python dependency:
 
@@ -113,5 +113,5 @@ python -m pip install -r requirements.txt
 Quick test:
 
 ```powershell
-python khmer_tts.py 1 USD 0
+python python/system_speech/khmer_tts.py 1 USD 0
 ```
