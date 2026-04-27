@@ -115,3 +115,43 @@ Quick test:
 ```powershell
 python python/system_speech/khmer_tts.py 1 USD 0
 ```
+
+## Telegram Stock Alert Setup
+
+Stock alerts are monitored by `python/telegram/stock_alert_monitor.py`.
+
+Install Python dependency:
+
+```powershell
+python -m pip install -r python/telegram/requirements.txt
+```
+
+Set Telegram env keys in `.env`:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- `TELEGRAM_STOCK_ALERT_ENABLED`
+- `TELEGRAM_STOCK_ALERT_RUN_SOURCE` (`popup` or `scheduler`)
+- `TELEGRAM_STOCK_ALERT_INTERVAL` (default `60`)
+- `TELEGRAM_STOCK_ALERT_MAX_ITEMS` (default `30`)
+- `TELEGRAM_STOCK_ALERT_NAME` (example: `CVT STORE`)
+
+Run once:
+
+```powershell
+python python/telegram/stock_alert_monitor.py --once
+```
+
+Discover chat IDs (after messaging your bot):
+
+```powershell
+python python/telegram/stock_alert_monitor.py --discover-chat-id
+```
+
+Popup mode (`TELEGRAM_STOCK_ALERT_RUN_SOURCE=popup`) sends when UI stock popup conditions are met.
+
+To run through scheduler instead, set `TELEGRAM_STOCK_ALERT_RUN_SOURCE=scheduler` and run:
+
+```powershell
+php artisan schedule:work
+```

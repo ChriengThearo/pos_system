@@ -889,6 +889,11 @@
         }
         session()->put('understock_alert_last', $underStockCount);
     }
+    try {
+        \App\Support\StockAlertNotifier::notifyFromPopupContext((int) $underStockCount, (bool) $showUnderStockAlert);
+    } catch (\Throwable) {
+        // Keep UI alert flow resilient even if Telegram check fails.
+    }
     $dashboardUrl = $canDashboardManage ? route('admin.dashboard') : route('store.home');
     $dashboardActive = $canDashboardManage ? request()->routeIs('admin.*') : request()->routeIs('store.home');
     $clientDeptCount = null;
@@ -1114,4 +1119,3 @@
 @endif
 </body>
 </html>
-

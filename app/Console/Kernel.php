@@ -12,7 +12,18 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        $enabled = filter_var((string) env('TELEGRAM_STOCK_ALERT_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+        $runSource = strtolower(trim((string) env('TELEGRAM_STOCK_ALERT_RUN_SOURCE', 'popup')));
+
+        if ($enabled && $runSource === 'scheduler') {
+            $script = base_path('python/telegram/stock_alert_monitor.py');
+            if (is_file($script)) {
+                $schedule
+                    ->exec('python "'.$script.'" --once')
+                    ->everyMinute()
+                    ->withoutOverlapping();
+            }
+        }
     }
 
     /**

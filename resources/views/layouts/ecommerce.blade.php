@@ -780,6 +780,11 @@
         }
         session()->put('understock_alert_last', $underStockCount);
     }
+    try {
+        \App\Support\StockAlertNotifier::notifyFromPopupContext((int) $underStockCount, (bool) $showUnderStockAlert);
+    } catch (\Throwable) {
+        // Keep UI alert flow resilient even if Telegram check fails.
+    }
 @endphp
 <div class="shell">
     <header class="appbar">
@@ -965,4 +970,3 @@
 @endif
 </body>
 </html>
-
