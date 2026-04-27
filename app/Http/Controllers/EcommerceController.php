@@ -3097,7 +3097,7 @@ class EcommerceController extends Controller
                 $debt = $invoiceGrandTotal > 0 ? round(max(0, $invoiceGrandTotal - $paidAmount), 2) : 0.0;
 
                 // Fire-and-forget: play Khmer TTS sound
-                $script = base_path('khmer_tts.py');
+                $script = base_path('python/system_speech/khmer_tts.py');
                 $amountArg = escapeshellarg((string) ($amount ?? '0'));
                 $currencyArg = escapeshellarg($currency ?? 'KHR');
                 $debtArg = escapeshellarg((string) $debt);
