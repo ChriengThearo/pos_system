@@ -4,7 +4,7 @@
 
 @section('content')
     @php
-        $rows = $sales->getCollection();
+        $rows = collect($sales->items());
 
         $pageInvoices = (int) $rows->count();
         $pageItems = (float) $rows->sum(fn (object $row): float => (float) ($row->item_qty ?? 0));

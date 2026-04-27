@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Support\BakongQR;
 use App\Support\SessionCart;
 use App\Support\StaffAuth;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -381,13 +383,33 @@ class EcommerceController extends Controller
 
     public function totalSales(Request $request): View
     {
-        $conn = $this->db();
         $fromDate = trim((string) $request->query('from_date', ''));
         $toDate = trim((string) $request->query('to_date', ''));
         $clientNo = trim((string) $request->query('client_no', ''));
         $q = trim((string) $request->query('q', ''));
 
-        $query = $conn->table('INVOICES as i')
+        $query = $this->buildTotalSalesQuery($fromDate, $toDate, $clientNo);
+        [$sales, $recentTransactions] = $this->resolveTotalSalesRows($query, $request, $q);
+
+        return view('ecommerce.total-sales', [
+            'sales' => $sales,
+            'clients' => $this->loadTotalSalesClients(),
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'clientNo' => $clientNo,
+            'q' => $q,
+            'todayOverview' => $this->buildTotalSalesTodayOverview(),
+            'weeklySalesSeries' => $this->buildTotalSalesWeeklySeries(),
+            'topProductsOverview' => $this->buildTotalSalesTopProductsOverview(),
+            'recentTransactions' => $recentTransactions,
+            'inventoryAlerts' => $this->buildTotalSalesInventoryAlerts(),
+            'cartCount' => $this->cart->totalQuantity(),
+        ]);
+    }
+
+    private function buildTotalSalesQuery(string $fromDate, string $toDate, string $clientNo): Builder
+    {
+        $query = $this->db()->table('INVOICES as i')
             ->join('CLIENTS as c', 'c.CLIENT_NO', '=', 'i.CLIENT_NO')
             ->join('EMPLOYEES as e', 'e.EMPLOYEE_ID', '=', 'i.EMPLOYEE_ID')
             ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
@@ -421,62 +443,69 @@ class EcommerceController extends Controller
         }
 
         if ($clientNo !== '') {
-            if (ctype_digit($clientNo)) {
-                $query->where('c.CLIENT_NO', '=', (int) $clientNo);
-            } else {
-                $query->where('c.CLIENT_NO', '=', $clientNo);
-            }
+            $query->where('c.CLIENT_NO', '=', ctype_digit($clientNo) ? (int) $clientNo : $clientNo);
         }
 
-        $decorateRow = function (object $row): object {
-            $subtotal = (float) ($row->subtotal ?? 0);
-            $discountRate = $this->normalizedDiscountRate((float) ($row->client_discount ?? 0));
-            $discountAmount = round($subtotal * $discountRate, 2);
-            $balance = round(max(0, $subtotal - $discountAmount), 2);
+        return $query;
+    }
 
-            $row->discount_rate = $discountRate;
-            $row->discount_amount = $discountAmount;
-            $row->balance = $balance;
+    private function decorateTotalSalesRow(object $row): object
+    {
+        $subtotal = (float) ($row->subtotal ?? 0);
+        $discountRate = $this->normalizedDiscountRate((float) ($row->client_discount ?? 0));
+        $discountAmount = round($subtotal * $discountRate, 2);
+        $balance = round(max(0, $subtotal - $discountAmount), 2);
 
-            return $row;
-        };
+        $row->discount_rate = $discountRate;
+        $row->discount_amount = $discountAmount;
+        $row->balance = $balance;
 
-        $matchesSearch = static function (object $row, string $keyword): bool {
-            $invoiceDate = $row->invoice_date
-                ? \Illuminate\Support\Carbon::parse($row->invoice_date)->format('Y-m-d')
-                : '';
+        return $row;
+    }
 
-            $searchValues = [
-                (string) ($row->invoice_no ?? ''),
-                (string) $invoiceDate,
-                (string) ($row->seller ?? ''),
-                (string) ($row->client_no ?? ''),
-                (string) ($row->client_name ?? ''),
-                (string) ($row->item_qty ?? ''),
-                number_format((float) ($row->subtotal ?? 0), 2, '.', ''),
-                number_format((float) (($row->discount_rate ?? 0) * 100), 2, '.', ''),
-                number_format((float) ($row->balance ?? 0), 2, '.', ''),
-                (string) ($row->invoice_status ?? ''),
-            ];
+    private function totalSalesMatchesSearch(object $row, string $keyword): bool
+    {
+        $invoiceDate = $row->invoice_date
+            ? \Illuminate\Support\Carbon::parse($row->invoice_date)->format('Y-m-d')
+            : '';
 
-            $haystack = mb_strtoupper(implode(' ', $searchValues));
+        $searchValues = [
+            (string) ($row->invoice_no ?? ''),
+            (string) $invoiceDate,
+            (string) ($row->seller ?? ''),
+            (string) ($row->client_no ?? ''),
+            (string) ($row->client_name ?? ''),
+            (string) ($row->item_qty ?? ''),
+            number_format((float) ($row->subtotal ?? 0), 2, '.', ''),
+            number_format((float) (($row->discount_rate ?? 0) * 100), 2, '.', ''),
+            number_format((float) ($row->balance ?? 0), 2, '.', ''),
+            (string) ($row->invoice_status ?? ''),
+        ];
 
-            return str_contains($haystack, $keyword);
-        };
+        return str_contains(mb_strtoupper(implode(' ', $searchValues)), $keyword);
+    }
 
-        $recentTransactions = collect();
-
+    /**
+     * @return array{0: LengthAwarePaginator, 1: Collection<int, object>}
+     */
+    private function resolveTotalSalesRows(Builder $query, Request $request, string $q): array
+    {
         if ($q !== '') {
+            $keyword = mb_strtoupper($q);
+
             $allRows = $query
                 ->orderByDesc('i.INVOICE_NO')
                 ->get()
-                ->map($decorateRow)
-                ->filter(fn (object $row): bool => $matchesSearch($row, mb_strtoupper($q)))
+                ->map(fn (object $row): object => $this->decorateTotalSalesRow($row))
+                ->filter(fn (object $row): bool => $this->totalSalesMatchesSearch($row, $keyword))
                 ->values();
 
             $perPage = 15;
             $currentPage = LengthAwarePaginator::resolveCurrentPage();
-            $pageItems = $allRows->slice(($currentPage - 1) * $perPage, $perPage)->values();
+            $pageItems = $allRows
+                ->slice(($currentPage - 1) * $perPage, $perPage)
+                ->values()
+                ->all();
 
             $sales = new LengthAwarePaginator(
                 $pageItems,
@@ -489,35 +518,66 @@ class EcommerceController extends Controller
                 ]
             );
 
-            $recentTransactions = $allRows->take(6)->values();
-        } else {
-            $recentTransactions = (clone $query)
-                ->orderByDesc('i.INVOICE_NO')
-                ->limit(6)
-                ->get()
-                ->map($decorateRow)
-                ->values();
-
-            $sales = $query
-                ->orderByDesc('i.INVOICE_NO')
-                ->paginate(15)
-                ->appends($request->query());
-
-            $sales->getCollection()->transform($decorateRow);
+            return [$sales, $allRows->take(6)->values()];
         }
 
-        $percentChange = static function (float $current, float $previous): float {
-            if ($previous <= 0.0) {
-                return $current > 0.0 ? 100.0 : 0.0;
-            }
+        $recentTransactions = (clone $query)
+            ->orderByDesc('i.INVOICE_NO')
+            ->limit(6)
+            ->get()
+            ->map(fn (object $row): object => $this->decorateTotalSalesRow($row))
+            ->values();
 
-            return round((($current - $previous) / $previous) * 100, 1);
-        };
+        $paginated = $query
+            ->orderByDesc('i.INVOICE_NO')
+            ->paginate(15)
+            ->appends($request->query());
 
+        $sales = $this->mapPaginatorItems(
+            $paginated,
+            fn (object $row): object => $this->decorateTotalSalesRow($row),
+            $request->query()
+        );
+
+        return [$sales, $recentTransactions];
+    }
+
+    private function totalSalesPercentChange(float $current, float $previous): float
+    {
+        if ($previous <= 0.0) {
+            return $current > 0.0 ? 100.0 : 0.0;
+        }
+
+        return round((($current - $previous) / $previous) * 100, 1);
+    }
+
+    /**
+     * @param  array{sales: float, transactions: int, customers: array<string, bool>}  $bucket
+     * @return array{sales: float, transactions: int, customers: int, avg_sale: float}
+     */
+    private function summarizeTotalSalesOverviewBucket(array $bucket): array
+    {
+        $transactions = (int) ($bucket['transactions'] ?? 0);
+        $customers = count($bucket['customers'] ?? []);
+        $sales = round((float) ($bucket['sales'] ?? 0), 2);
+
+        return [
+            'sales' => $sales,
+            'transactions' => $transactions,
+            'customers' => $customers,
+            'avg_sale' => $transactions > 0 ? round($sales / $transactions, 2) : 0.0,
+        ];
+    }
+
+    /**
+     * @return array<string, array<string, float>>
+     */
+    private function buildTotalSalesTodayOverview(): array
+    {
         $todayKey = \Illuminate\Support\Carbon::today()->format('Y-m-d');
         $yesterdayKey = \Illuminate\Support\Carbon::yesterday()->format('Y-m-d');
 
-        $dailyOverviewRows = $conn->table('INVOICES as i')
+        $dailyOverviewRows = $this->db()->table('INVOICES as i')
             ->join('CLIENTS as c', 'c.CLIENT_NO', '=', 'i.CLIENT_NO')
             ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
             ->selectRaw('
@@ -555,46 +615,39 @@ class EcommerceController extends Controller
             $overviewBuckets[$dayKey]['customers'][(string) ($row->client_no ?? '')] = true;
         }
 
-        $buildOverview = static function (array $bucket): array {
-            $transactions = (int) ($bucket['transactions'] ?? 0);
-            $customers = count($bucket['customers'] ?? []);
-            $sales = round((float) ($bucket['sales'] ?? 0), 2);
+        $todayStats = $this->summarizeTotalSalesOverviewBucket($overviewBuckets[$todayKey]);
+        $yesterdayStats = $this->summarizeTotalSalesOverviewBucket($overviewBuckets[$yesterdayKey]);
 
-            return [
-                'sales' => $sales,
-                'transactions' => $transactions,
-                'customers' => $customers,
-                'avg_sale' => $transactions > 0 ? round($sales / $transactions, 2) : 0.0,
-            ];
-        };
-
-        $todayStats = $buildOverview($overviewBuckets[$todayKey]);
-        $yesterdayStats = $buildOverview($overviewBuckets[$yesterdayKey]);
-
-        $todayOverview = [
+        return [
             'sales' => [
                 'today' => (float) $todayStats['sales'],
                 'yesterday' => (float) $yesterdayStats['sales'],
-                'change_percent' => $percentChange((float) $todayStats['sales'], (float) $yesterdayStats['sales']),
+                'change_percent' => $this->totalSalesPercentChange((float) $todayStats['sales'], (float) $yesterdayStats['sales']),
             ],
             'transactions' => [
                 'today' => (float) $todayStats['transactions'],
                 'yesterday' => (float) $yesterdayStats['transactions'],
-                'change_percent' => $percentChange((float) $todayStats['transactions'], (float) $yesterdayStats['transactions']),
+                'change_percent' => $this->totalSalesPercentChange((float) $todayStats['transactions'], (float) $yesterdayStats['transactions']),
             ],
             'customers' => [
                 'today' => (float) $todayStats['customers'],
                 'yesterday' => (float) $yesterdayStats['customers'],
-                'change_percent' => $percentChange((float) $todayStats['customers'], (float) $yesterdayStats['customers']),
+                'change_percent' => $this->totalSalesPercentChange((float) $todayStats['customers'], (float) $yesterdayStats['customers']),
             ],
             'avg_sale' => [
                 'today' => (float) $todayStats['avg_sale'],
                 'yesterday' => (float) $yesterdayStats['avg_sale'],
-                'change_percent' => $percentChange((float) $todayStats['avg_sale'], (float) $yesterdayStats['avg_sale']),
+                'change_percent' => $this->totalSalesPercentChange((float) $todayStats['avg_sale'], (float) $yesterdayStats['avg_sale']),
             ],
         ];
+    }
 
-        $weeklyRows = $conn->table('INVOICES as i')
+    /**
+     * @return Collection<int, object>
+     */
+    private function buildTotalSalesWeeklySeries(): Collection
+    {
+        $weeklyRows = $this->db()->table('INVOICES as i')
             ->join('CLIENTS as c', 'c.CLIENT_NO', '=', 'i.CLIENT_NO')
             ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
             ->selectRaw('
@@ -638,13 +691,21 @@ class EcommerceController extends Controller
             $weeklyBuckets[$dayKey]['transactions']++;
         }
 
-        $weeklySalesSeries = collect(array_values($weeklyBuckets))
+        return collect(array_values($weeklyBuckets))
             ->map(fn (array $row): object => (object) [
                 'date' => $row['date'],
                 'label' => $row['label'],
                 'sales' => round((float) $row['sales'], 2),
                 'transactions' => (int) $row['transactions'],
             ]);
+    }
+
+    /**
+     * @return Collection<int, object>
+     */
+    private function buildTotalSalesTopProductsOverview(): Collection
+    {
+        $conn = $this->db();
 
         $topProductsCurrentWeek = $conn->table('INVOICE_DETAILS as d')
             ->join('INVOICES as i', 'i.INVOICE_NO', '=', 'd.INVOICE_NO')
@@ -674,19 +735,25 @@ class EcommerceController extends Controller
                 (string) ($row->product_no ?? '') => (float) ($row->sales ?? 0),
             ]);
 
-        $topProductsOverview = $topProductsCurrentWeek
-            ->map(function (object $row) use ($topProductsPreviousWeek, $percentChange): object {
+        return $topProductsCurrentWeek
+            ->map(function (object $row) use ($topProductsPreviousWeek): object {
                 $productNo = (string) ($row->product_no ?? '');
                 $currentSales = (float) ($row->sales ?? 0);
                 $previousSales = (float) ($topProductsPreviousWeek[$productNo] ?? 0);
 
-                $row->change_percent = $percentChange($currentSales, $previousSales);
+                $row->change_percent = $this->totalSalesPercentChange($currentSales, $previousSales);
 
                 return $row;
             })
             ->values();
+    }
 
-        $inventoryAlerts = $conn->table('ALERT_STOCKS as a')
+    /**
+     * @return Collection<int, object>
+     */
+    private function buildTotalSalesInventoryAlerts(): Collection
+    {
+        return $this->db()->table('ALERT_STOCKS as a')
             ->join('PRODUCTS as p', 'p.PRODUCT_NO', '=', 'a.PRODUCT_NO')
             ->selectRaw('
                 p.PRODUCT_NO as product_no,
@@ -708,26 +775,51 @@ class EcommerceController extends Controller
                 return $row;
             })
             ->values();
+    }
 
-        $clients = $conn->table('CLIENTS')
+    /**
+     * @return Collection<int, object>
+     */
+    private function loadTotalSalesClients(): Collection
+    {
+        return $this->db()->table('CLIENTS')
             ->selectRaw('CLIENT_NO as client_no, CLIENT_NAME as client_name')
             ->orderBy('CLIENT_NAME')
             ->get();
+    }
 
-        return view('ecommerce.total-sales', [
-            'sales' => $sales,
-            'clients' => $clients,
-            'fromDate' => $fromDate,
-            'toDate' => $toDate,
-            'clientNo' => $clientNo,
-            'q' => $q,
-            'todayOverview' => $todayOverview,
-            'weeklySalesSeries' => $weeklySalesSeries,
-            'topProductsOverview' => $topProductsOverview,
-            'recentTransactions' => $recentTransactions,
-            'inventoryAlerts' => $inventoryAlerts,
-            'cartCount' => $this->cart->totalQuantity(),
-        ]);
+    /**
+     * @param  callable(object):object  $mapper
+     */
+    private function mapPaginatorItems(LengthAwarePaginatorContract $paginator, callable $mapper, array $query): LengthAwarePaginator
+    {
+        $items = collect($paginator->items())
+            ->map(function ($row) use ($mapper): object {
+                $objectRow = is_object($row) ? $row : (object) $row;
+                $mapped = $mapper($objectRow);
+
+                return is_object($mapped) ? $mapped : (object) $mapped;
+            })
+            ->values()
+            ->all();
+
+        $fragment = $paginator->fragment();
+        $options = [
+            'path' => $paginator->path() ?: LengthAwarePaginator::resolveCurrentPath(),
+            'query' => $query,
+        ];
+
+        if (is_string($fragment) && $fragment !== '') {
+            $options['fragment'] = $fragment;
+        }
+
+        return new LengthAwarePaginator(
+            $items,
+            $paginator->total(),
+            $paginator->perPage(),
+            $paginator->currentPage(),
+            $options
+        );
     }
 
     public function clientDepts(Request $request): View
@@ -766,31 +858,35 @@ class EcommerceController extends Controller
             ->paginate(15)
             ->appends($request->query());
 
-        $rows->getCollection()->transform(function (object $row): object {
-            $invoiceNo = (int) ($row->invoice_no ?? 0);
-            if ($invoiceNo <= 0) {
-                $row->amount = 0.0;
-                $row->recieve_amount = 0.0;
-                $row->debt_amount = 0.0;
+        $rows = $this->mapPaginatorItems(
+            $rows,
+            function (object $row): object {
+                $invoiceNo = (int) ($row->invoice_no ?? 0);
+                if ($invoiceNo <= 0) {
+                    $row->amount = 0.0;
+                    $row->recieve_amount = 0.0;
+                    $row->debt_amount = 0.0;
+
+                    return $row;
+                }
+
+                try {
+                    $amount = $this->invoiceGrandTotal($invoiceNo);
+                } catch (\Throwable) {
+                    $amount = 0.0;
+                }
+
+                $recieved = $this->resolveInvoiceReceivedAmount($invoiceNo);
+                $debt = round(max(0, $amount - $recieved), 2);
+
+                $row->amount = $amount;
+                $row->recieve_amount = $recieved;
+                $row->debt_amount = $debt;
 
                 return $row;
-            }
-
-            try {
-                $amount = $this->invoiceGrandTotal($invoiceNo);
-            } catch (\Throwable) {
-                $amount = 0.0;
-            }
-
-            $recieved = $this->resolveInvoiceReceivedAmount($invoiceNo);
-            $debt = round(max(0, $amount - $recieved), 2);
-
-            $row->amount = $amount;
-            $row->recieve_amount = $recieved;
-            $row->debt_amount = $debt;
-
-            return $row;
-        });
+            },
+            $request->query()
+        );
 
         return view('ecommerce.client-depts', [
             'rows' => $rows,
@@ -890,26 +986,30 @@ class EcommerceController extends Controller
             ->appends($request->query());
 
         $invoiceTotals = [];
-        $rows->getCollection()->transform(function (object $row) use (&$invoiceTotals): object {
-            $invoiceNo = (int) ($row->invoice_no ?? 0);
-            if (! array_key_exists($invoiceNo, $invoiceTotals)) {
-                try {
-                    $invoiceTotals[$invoiceNo] = $this->invoiceGrandTotal($invoiceNo);
-                } catch (\Throwable) {
-                    $invoiceTotals[$invoiceNo] = 0.0;
+        $rows = $this->mapPaginatorItems(
+            $rows,
+            function (object $row) use (&$invoiceTotals): object {
+                $invoiceNo = (int) ($row->invoice_no ?? 0);
+                if (! array_key_exists($invoiceNo, $invoiceTotals)) {
+                    try {
+                        $invoiceTotals[$invoiceNo] = $this->invoiceGrandTotal($invoiceNo);
+                    } catch (\Throwable) {
+                        $invoiceTotals[$invoiceNo] = 0.0;
+                    }
                 }
-            }
 
-            $amount = round(max(0, (float) ($invoiceTotals[$invoiceNo] ?? 0)), 2);
-            $recievedToDate = round(max(0, (float) ($row->recieved_to_date ?? 0)), 2);
+                $amount = round(max(0, (float) ($invoiceTotals[$invoiceNo] ?? 0)), 2);
+                $recievedToDate = round(max(0, (float) ($row->recieved_to_date ?? 0)), 2);
 
-            $row->amount = $amount;
-            $row->debt_amount = round(max(0, $amount - $recievedToDate), 2);
-            $row->recieve_amount = round(max(0, (float) ($row->recieve_amount ?? 0)), 2);
-            $row->recieved_to_date = $recievedToDate;
+                $row->amount = $amount;
+                $row->debt_amount = round(max(0, $amount - $recievedToDate), 2);
+                $row->recieve_amount = round(max(0, (float) ($row->recieve_amount ?? 0)), 2);
+                $row->recieved_to_date = $recievedToDate;
 
-            return $row;
-        });
+                return $row;
+            },
+            $request->query()
+        );
 
         return view('ecommerce.dept-history', [
             'rows' => $rows,
