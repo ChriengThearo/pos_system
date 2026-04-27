@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\BakongQR;
+use App\Support\PaymentAlertNotifier;
 use App\Support\SessionCart;
 use App\Support\StaffAuth;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
@@ -15,6 +16,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RuntimeException;
@@ -1363,6 +1365,10 @@ class EcommerceController extends Controller
             return back()->withInput()->with('error', 'Failed to create invoice: '.$e->getMessage());
         }
 
+        if ($invoiceNo !== null) {
+            $this->notifyTelegramPaymentAlert((int) $invoiceNo, (string) $paymentType, $recieveAmount, $currencyNo);
+        }
+
         $redirect = redirect()
             ->route('invoices.index', ['invoice_no' => $invoiceNo])
             ->with('success', "Invoice #{$invoiceNo} created ({$invoiceStatus}).");
@@ -1487,6 +1493,8 @@ class EcommerceController extends Controller
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', 'Unable to add invoice items: '.$e->getMessage());
         }
+
+        $this->notifyTelegramPaymentAlert($invoiceNo, (string) $paymentType, $recieveAmount, $currencyNo);
 
         $redirect = redirect()
             ->route('invoices.index', ['invoice_no' => $invoiceNo])
@@ -2177,7 +2185,9 @@ class EcommerceController extends Controller
             'payment_amount' => ['required', 'numeric', 'min:0'],
             'recieve_amount' => ['required', 'numeric', 'min:0'],
             'payment_currency' => ['required'],
+            'payment_type' => ['nullable', 'string', 'in:cash,qr'],
         ]);
+        $paymentType = $validated['payment_type'] ?? 'cash';
 
         $invoiceExists = $this->db()->table('INVOICES')
             ->where('INVOICE_NO', '=', $invoiceNo)
@@ -2242,6 +2252,8 @@ class EcommerceController extends Controller
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', 'Unable to save repayment: '.$e->getMessage());
         }
+
+        $this->notifyTelegramPaymentAlert($invoiceNo, (string) $paymentType, $recieveAmount, $resolvedCurrencyNo);
 
         if ($nextStatus === 'Completed') {
             return redirect()
@@ -3254,6 +3266,50 @@ class EcommerceController extends Controller
         }
 
         return $name;
+    }
+
+    private function notifyTelegramPaymentAlert(int $invoiceNo, string $paidBy, float $paidAmountLocal, ?int $currencyNo = null): void
+    {
+        try {
+            $order = $this->loadOrder($invoiceNo);
+            if (! $order) {
+                return;
+            }
+
+            $header = $order['header'] ?? null;
+            $customerName = trim((string) ($header->client_name ?? 'Walk-in Customer'));
+            if ($customerName === '') {
+                $customerName = 'Walk-in Customer';
+            }
+
+            $resolvedCurrencyNo = $currencyNo !== null && $currencyNo > 0
+                ? $currencyNo
+                : $this->defaultCurrencyNo();
+            $rateToUsd = $resolvedCurrencyNo !== null ? $this->currencyRateToUsd($resolvedCurrencyNo) : 1.0;
+            if ($rateToUsd <= 0) {
+                $rateToUsd = 1.0;
+            }
+
+            $totalUsd = round(max(0, (float) ($order['grand_total'] ?? 0)), 2);
+            $totalLocal = round($totalUsd * $rateToUsd, 2);
+            $debtUsd = round(max(0, $this->resolveInvoiceDebtAmount($invoiceNo)), 2);
+            $debtLocal = round($debtUsd * $rateToUsd, 2);
+            $currencyCode = $this->currencyCode($resolvedCurrencyNo);
+
+            PaymentAlertNotifier::notifyPayment([
+                'customer_name' => $customerName,
+                'paid_by' => $paidBy,
+                'total' => $totalLocal,
+                'paid' => round(max(0, $paidAmountLocal), 2),
+                'debt' => $debtLocal,
+                'currency_code' => $currencyCode,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to dispatch Telegram payment alert.', [
+                'invoice_no' => $invoiceNo,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function normalizedDiscountRate(float $discount): float

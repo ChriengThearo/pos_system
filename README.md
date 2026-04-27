@@ -155,3 +155,19 @@ To run through scheduler instead, set `TELEGRAM_STOCK_ALERT_RUN_SOURCE=scheduler
 ```powershell
 php artisan schedule:work
 ```
+
+## Telegram Payment Alert Setup
+
+Payment alerts are sent by `python/telegram/payment_alert_sender.py` when invoice payment actions are saved.
+
+Set payment bot env keys in `.env`:
+
+- `TELEGRAM_PAYMENT_ALERT_ENABLED`
+- `TELEGRAM_PAYMENT_BOT_TOKEN`
+- `TELEGRAM_PAYMENT_CHAT_ID`
+
+Dry run:
+
+```powershell
+python python/telegram/payment_alert_sender.py --once --dry-run --customer-name "John" --paid-by cash --total 120 --paid 100 --debt 20 --currency USD
+```

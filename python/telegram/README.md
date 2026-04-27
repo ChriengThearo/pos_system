@@ -68,3 +68,45 @@ When `TELEGRAM_STOCK_ALERT_RUN_SOURCE=popup` (default), the web UI popup `Stock 
 Laravel calls Python immediately when popup conditions are met, with global dedupe via server cache (one Telegram send per count increase).
 
 No `.stock_alert_state.json` file is required in popup mode.
+
+---
+
+# Telegram Payment Alert Sender
+
+This sender pushes a payment message to Telegram immediately when Laravel calls it.
+
+## Configure `.env`
+
+```dotenv
+TELEGRAM_PAYMENT_ALERT_ENABLED=true
+TELEGRAM_PAYMENT_BOT_TOKEN=
+TELEGRAM_PAYMENT_CHAT_ID=
+```
+
+Notes:
+- `TELEGRAM_PAYMENT_BOT_TOKEN` is usually a different bot token from stock alerts.
+- `TELEGRAM_PAYMENT_CHAT_ID` can be a private/group/channel numeric chat ID.
+- If payment keys are not set, the sender falls back to `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+- If you get `401 Unauthorized`, regenerate bot token in BotFather and update `.env`.
+
+## Discover chat ID for payment bot
+
+```powershell
+python python/telegram/payment_alert_sender.py --discover-chat-id
+```
+
+## Dry run payment message format
+
+```powershell
+python python/telegram/payment_alert_sender.py --once --dry-run --customer-name "John" --paid-by cash --total 120 --paid 100 --debt 20 --currency USD
+```
+
+Message format:
+
+```text
+From: John
+Paid by: Cash
+Total: $120.00
+Paid: $100.00
+Debt: $20.00
+```
