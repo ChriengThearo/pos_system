@@ -96,17 +96,48 @@ def normalize_paid_by(raw: str) -> str:
     return "Cash"
 
 
+def normalize_currency(raw: str) -> str:
+    value = raw.strip().upper()
+    if value in {"USD", "US DOLLAR", "DOLLAR", "$"}:
+        return "USD"
+    if value in {"EUR", "EURO", "EUROS", "€"}:
+        return "EUR"
+    if value in {"KHR", "RIEL", "RIELS", "៛"}:
+        return "KHR"
+    if value in {"GBP", "POUND", "POUNDS", "£"}:
+        return "GBP"
+    if value in {"JPY", "YEN", "¥"}:
+        return "JPY"
+    if value in {"THB", "BAHT", "฿"}:
+        return "THB"
+    return value if value else "USD"
+
+
 def format_amount(amount: float, currency_code: str) -> str:
-    code = currency_code.strip().upper() or "USD"
+    code = normalize_currency(currency_code)
     number = f"{amount:,.2f}"
 
     if code == "USD":
         return f"${number}"
     if code == "EUR":
-        return f"EUR {number}"
-    if code in {"KHR", "RIEL"}:
+        return f"€{number}"
+    if code == "KHR":
         return f"Riel {number}"
+    if code == "GBP":
+        return f"£{number}"
+    if code in {"JPY", "THB"}:
+        symbol = "¥" if code == "JPY" else "฿"
+        return f"{symbol}{number}"
     return f"{code} {number}"
+
+
+def console_print(text: str) -> None:
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        safe_text = text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(safe_text)
 
 
 def build_message(customer_name: str, paid_by: str, total: float, paid: float, debt: float, currency_code: str) -> str:
@@ -203,19 +234,19 @@ def main() -> int:
         try:
             chats = discover_chat_ids(token)
             if not chats:
-                print("No chats found in getUpdates yet. Send at least one message to the bot, then run again.")
+                console_print("No chats found in getUpdates yet. Send at least one message to the bot, then run again.")
                 return 0
-            print("Found chats:")
+            console_print("Found chats:")
             for chat in chats:
-                print(f"- chat_id={chat['chat_id']} | type={chat['type']} | title={chat['title']}")
+                console_print(f"- chat_id={chat['chat_id']} | type={chat['type']} | title={chat['title']}")
             return 0
         except Exception as exc:
-            print(f"Failed to discover chat IDs: {exc}", file=sys.stderr)
+            console_print(f"Failed to discover chat IDs: {exc}")
             return 1
 
     enabled = os.getenv("TELEGRAM_PAYMENT_ALERT_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     if not enabled:
-        print("Payment alert sender is disabled (TELEGRAM_PAYMENT_ALERT_ENABLED=false).")
+        console_print("Payment alert sender is disabled (TELEGRAM_PAYMENT_ALERT_ENABLED=false).")
         return 0
 
     chat_id = env_required_any("TELEGRAM_PAYMENT_CHAT_ID", "TELEGRAM_CHAT_ID")
@@ -237,16 +268,16 @@ def main() -> int:
     )
 
     if args.dry_run:
-        print("DRY RUN - message would be sent:")
-        print(message)
+        console_print("DRY RUN - message would be sent:")
+        console_print(message)
         return 0
 
     try:
         send_telegram_message(token, chat_id, message)
-        print("Telegram payment alert sent")
+        console_print("Telegram payment alert sent")
         return 0
     except Exception as exc:
-        print(f"Failed to send Telegram payment alert: {exc}", file=sys.stderr)
+        console_print(f"Failed to send Telegram payment alert: {exc}")
         return 1
 
 
