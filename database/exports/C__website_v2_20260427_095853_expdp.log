@@ -1,0 +1,52 @@
+;;; 
+Export: Release 12.1.0.2.0 - Production on Mon Apr 27 09:58:53 2026
+
+Copyright (c) 1982, 2014, Oracle and/or its affiliates.  All rights reserved.
+;;; 
+Connected to: Oracle Database 12c Enterprise Edition Release 12.1.0.2.0 - 64bit Production
+With the Partitioning, OLAP, Advanced Analytics and Real Application Testing options
+Starting "C##WEBSITE_V2"."SYS_EXPORT_SCHEMA_01":  C##website_v2/********@//localhost:1521/orcl schemas=C##WEBSITE_V2 directory=POS_EXPORT_DIR dumpfile=C__website_v2_20260427_095853.dmp logfile=C__website_v2_20260427_095853_expdp.log 
+Estimate in progress using BLOCKS method...
+Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+Total estimation using BLOCKS method: 1.5 MB
+Processing object type SCHEMA_EXPORT/SYSTEM_GRANT
+Processing object type SCHEMA_EXPORT/ROLE_GRANT
+Processing object type SCHEMA_EXPORT/DEFAULT_ROLE
+Processing object type SCHEMA_EXPORT/TABLESPACE_QUOTA
+Processing object type SCHEMA_EXPORT/PRE_SCHEMA/PROCACT_SCHEMA
+Processing object type SCHEMA_EXPORT/TABLE/TABLE
+Processing object type SCHEMA_EXPORT/TABLE/COMMENT
+Processing object type SCHEMA_EXPORT/TABLE/IDENTITY_COLUMN
+Processing object type SCHEMA_EXPORT/VIEW/VIEW
+Processing object type SCHEMA_EXPORT/TABLE/INDEX/INDEX
+Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/CONSTRAINT
+Processing object type SCHEMA_EXPORT/TABLE/INDEX/STATISTICS/INDEX_STATISTICS
+Processing object type SCHEMA_EXPORT/TABLE/CONSTRAINT/REF_CONSTRAINT
+Processing object type SCHEMA_EXPORT/TABLE/TRIGGER
+Processing object type SCHEMA_EXPORT/TABLE/STATISTICS/TABLE_STATISTICS
+Processing object type SCHEMA_EXPORT/STATISTICS/MARKER
+. . exported "C##WEBSITE_V2"."EMPLOYEES"                 12.35 KB      23 rows
+. . exported "C##WEBSITE_V2"."PRODUCT_PHOTO"             7.523 KB       8 rows
+. . exported "C##WEBSITE_V2"."CLIENTS"                   49.25 KB     521 rows
+. . exported "C##WEBSITE_V2"."ALERT_STOCKS"              6.945 KB      32 rows
+. . exported "C##WEBSITE_V2"."CLIENT_TYPE"               6.562 KB       4 rows
+. . exported "C##WEBSITE_V2"."CURRENCIES"                7.492 KB       5 rows
+. . exported "C##WEBSITE_V2"."FORM_CONTOL"               9.039 KB      37 rows
+. . exported "C##WEBSITE_V2"."GROUP_USER"                6.562 KB       5 rows
+. . exported "C##WEBSITE_V2"."INVOICES"                  37.72 KB     569 rows
+. . exported "C##WEBSITE_V2"."INVOICE_DETAILS"           29.75 KB    1105 rows
+. . exported "C##WEBSITE_V2"."JOBS"                      6.656 KB       7 rows
+. . exported "C##WEBSITE_V2"."PAYMENTS"                  10.10 KB      21 rows
+. . exported "C##WEBSITE_V2"."PERMISSION_GROUP"          8.515 KB      99 rows
+. . exported "C##WEBSITE_V2"."PRODUCTS"                  10.46 KB      34 rows
+. . exported "C##WEBSITE_V2"."PRODUCT_TYPE"              6.210 KB       8 rows
+. . exported "C##WEBSITE_V2"."PURCHASES"                   7.5 KB      23 rows
+. . exported "C##WEBSITE_V2"."PURCHASE_DETAILS"          7.179 KB      38 rows
+. . exported "C##WEBSITE_V2"."SUPPLIERS"                 9.281 KB      20 rows
+. . exported "C##WEBSITE_V2"."USERS"                     7.312 KB       4 rows
+. . exported "C##WEBSITE_V2"."PRODUCT_MEASURE"               0 KB       0 rows
+Master table "C##WEBSITE_V2"."SYS_EXPORT_SCHEMA_01" successfully loaded/unloaded
+******************************************************************************
+Dump file set for C##WEBSITE_V2.SYS_EXPORT_SCHEMA_01 is:
+  E:\NU_YEAR3\NU3_SEMESTER2\MANAGEMENT_INFORMATION_SYSTEM\POS_SYSTEM\DATABASE\EXPORTS\C__WEBSITE_V2_20260427_095853.DMP
+Job "C##WEBSITE_V2"."SYS_EXPORT_SCHEMA_01" successfully completed at Mon Apr 27 09:59:41 2026 elapsed 0 00:00:47
