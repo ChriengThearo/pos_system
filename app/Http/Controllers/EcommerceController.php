@@ -441,34 +441,37 @@ class EcommerceController extends Controller
             return $row;
         };
 
+        $matchesSearch = static function (object $row, string $keyword): bool {
+            $invoiceDate = $row->invoice_date
+                ? \Illuminate\Support\Carbon::parse($row->invoice_date)->format('Y-m-d')
+                : '';
+
+            $searchValues = [
+                (string) ($row->invoice_no ?? ''),
+                (string) $invoiceDate,
+                (string) ($row->seller ?? ''),
+                (string) ($row->client_no ?? ''),
+                (string) ($row->client_name ?? ''),
+                (string) ($row->item_qty ?? ''),
+                number_format((float) ($row->subtotal ?? 0), 2, '.', ''),
+                number_format((float) (($row->discount_rate ?? 0) * 100), 2, '.', ''),
+                number_format((float) ($row->balance ?? 0), 2, '.', ''),
+                (string) ($row->invoice_status ?? ''),
+            ];
+
+            $haystack = mb_strtoupper(implode(' ', $searchValues));
+
+            return str_contains($haystack, $keyword);
+        };
+
+        $recentTransactions = collect();
+
         if ($q !== '') {
             $allRows = $query
                 ->orderByDesc('i.INVOICE_NO')
                 ->get()
                 ->map($decorateRow)
-                ->filter(function (object $row) use ($q): bool {
-                    $keyword = mb_strtoupper($q);
-                    $invoiceDate = $row->invoice_date
-                        ? \Illuminate\Support\Carbon::parse($row->invoice_date)->format('Y-m-d')
-                        : '';
-
-                    $searchValues = [
-                        (string) ($row->invoice_no ?? ''),
-                        (string) $invoiceDate,
-                        (string) ($row->seller ?? ''),
-                        (string) ($row->client_no ?? ''),
-                        (string) ($row->client_name ?? ''),
-                        (string) ($row->item_qty ?? ''),
-                        number_format((float) ($row->subtotal ?? 0), 2, '.', ''),
-                        number_format((float) (($row->discount_rate ?? 0) * 100), 2, '.', ''),
-                        number_format((float) ($row->balance ?? 0), 2, '.', ''),
-                        (string) ($row->invoice_status ?? ''),
-                    ];
-
-                    $haystack = mb_strtoupper(implode(' ', $searchValues));
-
-                    return str_contains($haystack, $keyword);
-                })
+                ->filter(fn (object $row): bool => $matchesSearch($row, mb_strtoupper($q)))
                 ->values();
 
             $perPage = 15;
@@ -485,7 +488,16 @@ class EcommerceController extends Controller
                     'query' => $request->query(),
                 ]
             );
+
+            $recentTransactions = $allRows->take(6)->values();
         } else {
+            $recentTransactions = (clone $query)
+                ->orderByDesc('i.INVOICE_NO')
+                ->limit(6)
+                ->get()
+                ->map($decorateRow)
+                ->values();
+
             $sales = $query
                 ->orderByDesc('i.INVOICE_NO')
                 ->paginate(15)
@@ -493,6 +505,209 @@ class EcommerceController extends Controller
 
             $sales->getCollection()->transform($decorateRow);
         }
+
+        $percentChange = static function (float $current, float $previous): float {
+            if ($previous <= 0.0) {
+                return $current > 0.0 ? 100.0 : 0.0;
+            }
+
+            return round((($current - $previous) / $previous) * 100, 1);
+        };
+
+        $todayKey = \Illuminate\Support\Carbon::today()->format('Y-m-d');
+        $yesterdayKey = \Illuminate\Support\Carbon::yesterday()->format('Y-m-d');
+
+        $dailyOverviewRows = $conn->table('INVOICES as i')
+            ->join('CLIENTS as c', 'c.CLIENT_NO', '=', 'i.CLIENT_NO')
+            ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
+            ->selectRaw('
+                TRUNC(i.INVOICE_DATE) as invoice_day,
+                i.INVOICE_NO as invoice_no,
+                c.CLIENT_NO as client_no,
+                c.DISCOUNT as client_discount,
+                NVL(SUM(d.QTY * d.PRICE), 0) as subtotal
+            ')
+            ->whereRaw('TRUNC(i.INVOICE_DATE) BETWEEN TRUNC(SYSDATE) - 1 AND TRUNC(SYSDATE)')
+            ->groupByRaw('TRUNC(i.INVOICE_DATE), i.INVOICE_NO, c.CLIENT_NO, c.DISCOUNT')
+            ->get();
+
+        $overviewBuckets = [
+            $todayKey => ['sales' => 0.0, 'transactions' => 0, 'customers' => []],
+            $yesterdayKey => ['sales' => 0.0, 'transactions' => 0, 'customers' => []],
+        ];
+
+        foreach ($dailyOverviewRows as $row) {
+            if (empty($row->invoice_day)) {
+                continue;
+            }
+
+            $dayKey = \Illuminate\Support\Carbon::parse((string) $row->invoice_day)->format('Y-m-d');
+            if (! isset($overviewBuckets[$dayKey])) {
+                continue;
+            }
+
+            $subtotal = (float) ($row->subtotal ?? 0);
+            $discountRate = $this->normalizedDiscountRate((float) ($row->client_discount ?? 0));
+            $balance = round(max(0, $subtotal - ($subtotal * $discountRate)), 2);
+
+            $overviewBuckets[$dayKey]['sales'] += $balance;
+            $overviewBuckets[$dayKey]['transactions']++;
+            $overviewBuckets[$dayKey]['customers'][(string) ($row->client_no ?? '')] = true;
+        }
+
+        $buildOverview = static function (array $bucket): array {
+            $transactions = (int) ($bucket['transactions'] ?? 0);
+            $customers = count($bucket['customers'] ?? []);
+            $sales = round((float) ($bucket['sales'] ?? 0), 2);
+
+            return [
+                'sales' => $sales,
+                'transactions' => $transactions,
+                'customers' => $customers,
+                'avg_sale' => $transactions > 0 ? round($sales / $transactions, 2) : 0.0,
+            ];
+        };
+
+        $todayStats = $buildOverview($overviewBuckets[$todayKey]);
+        $yesterdayStats = $buildOverview($overviewBuckets[$yesterdayKey]);
+
+        $todayOverview = [
+            'sales' => [
+                'today' => (float) $todayStats['sales'],
+                'yesterday' => (float) $yesterdayStats['sales'],
+                'change_percent' => $percentChange((float) $todayStats['sales'], (float) $yesterdayStats['sales']),
+            ],
+            'transactions' => [
+                'today' => (float) $todayStats['transactions'],
+                'yesterday' => (float) $yesterdayStats['transactions'],
+                'change_percent' => $percentChange((float) $todayStats['transactions'], (float) $yesterdayStats['transactions']),
+            ],
+            'customers' => [
+                'today' => (float) $todayStats['customers'],
+                'yesterday' => (float) $yesterdayStats['customers'],
+                'change_percent' => $percentChange((float) $todayStats['customers'], (float) $yesterdayStats['customers']),
+            ],
+            'avg_sale' => [
+                'today' => (float) $todayStats['avg_sale'],
+                'yesterday' => (float) $yesterdayStats['avg_sale'],
+                'change_percent' => $percentChange((float) $todayStats['avg_sale'], (float) $yesterdayStats['avg_sale']),
+            ],
+        ];
+
+        $weeklyRows = $conn->table('INVOICES as i')
+            ->join('CLIENTS as c', 'c.CLIENT_NO', '=', 'i.CLIENT_NO')
+            ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
+            ->selectRaw('
+                TRUNC(i.INVOICE_DATE) as invoice_day,
+                i.INVOICE_NO as invoice_no,
+                c.DISCOUNT as client_discount,
+                NVL(SUM(d.QTY * d.PRICE), 0) as subtotal
+            ')
+            ->whereRaw('TRUNC(i.INVOICE_DATE) BETWEEN TRUNC(SYSDATE) - 6 AND TRUNC(SYSDATE)')
+            ->groupByRaw('TRUNC(i.INVOICE_DATE), i.INVOICE_NO, c.DISCOUNT')
+            ->get();
+
+        $todayDate = \Illuminate\Support\Carbon::today();
+        $weeklyBuckets = [];
+        for ($dayOffset = 6; $dayOffset >= 0; $dayOffset--) {
+            $day = $todayDate->copy()->subDays($dayOffset);
+            $key = $day->format('Y-m-d');
+            $weeklyBuckets[$key] = [
+                'date' => $key,
+                'label' => $day->format('D'),
+                'sales' => 0.0,
+                'transactions' => 0,
+            ];
+        }
+
+        foreach ($weeklyRows as $row) {
+            if (empty($row->invoice_day)) {
+                continue;
+            }
+
+            $dayKey = \Illuminate\Support\Carbon::parse((string) $row->invoice_day)->format('Y-m-d');
+            if (! isset($weeklyBuckets[$dayKey])) {
+                continue;
+            }
+
+            $subtotal = (float) ($row->subtotal ?? 0);
+            $discountRate = $this->normalizedDiscountRate((float) ($row->client_discount ?? 0));
+            $balance = round(max(0, $subtotal - ($subtotal * $discountRate)), 2);
+
+            $weeklyBuckets[$dayKey]['sales'] += $balance;
+            $weeklyBuckets[$dayKey]['transactions']++;
+        }
+
+        $weeklySalesSeries = collect(array_values($weeklyBuckets))
+            ->map(fn (array $row): object => (object) [
+                'date' => $row['date'],
+                'label' => $row['label'],
+                'sales' => round((float) $row['sales'], 2),
+                'transactions' => (int) $row['transactions'],
+            ]);
+
+        $topProductsCurrentWeek = $conn->table('INVOICE_DETAILS as d')
+            ->join('INVOICES as i', 'i.INVOICE_NO', '=', 'd.INVOICE_NO')
+            ->join('PRODUCTS as p', 'p.PRODUCT_NO', '=', 'd.PRODUCT_NO')
+            ->selectRaw('
+                d.PRODUCT_NO as product_no,
+                p.PRODUCT_NAME as product_name,
+                NVL(SUM(d.QTY), 0) as units,
+                NVL(SUM(d.QTY * d.PRICE), 0) as sales
+            ')
+            ->whereRaw('TRUNC(i.INVOICE_DATE) BETWEEN TRUNC(SYSDATE) - 6 AND TRUNC(SYSDATE)')
+            ->groupBy('d.PRODUCT_NO', 'p.PRODUCT_NAME')
+            ->orderByDesc('sales')
+            ->limit(6)
+            ->get();
+
+        $topProductsPreviousWeek = $conn->table('INVOICE_DETAILS as d')
+            ->join('INVOICES as i', 'i.INVOICE_NO', '=', 'd.INVOICE_NO')
+            ->selectRaw('
+                d.PRODUCT_NO as product_no,
+                NVL(SUM(d.QTY * d.PRICE), 0) as sales
+            ')
+            ->whereRaw('TRUNC(i.INVOICE_DATE) BETWEEN TRUNC(SYSDATE) - 13 AND TRUNC(SYSDATE) - 7')
+            ->groupBy('d.PRODUCT_NO')
+            ->get()
+            ->mapWithKeys(fn (object $row): array => [
+                (string) ($row->product_no ?? '') => (float) ($row->sales ?? 0),
+            ]);
+
+        $topProductsOverview = $topProductsCurrentWeek
+            ->map(function (object $row) use ($topProductsPreviousWeek, $percentChange): object {
+                $productNo = (string) ($row->product_no ?? '');
+                $currentSales = (float) ($row->sales ?? 0);
+                $previousSales = (float) ($topProductsPreviousWeek[$productNo] ?? 0);
+
+                $row->change_percent = $percentChange($currentSales, $previousSales);
+
+                return $row;
+            })
+            ->values();
+
+        $inventoryAlerts = $conn->table('ALERT_STOCKS as a')
+            ->join('PRODUCTS as p', 'p.PRODUCT_NO', '=', 'a.PRODUCT_NO')
+            ->selectRaw('
+                p.PRODUCT_NO as product_no,
+                p.PRODUCT_NAME as product_name,
+                p.QTY_ON_HAND as qty_on_hand,
+                a.LOWER_QTY as lower_qty,
+                a.HIGHER_QTY as higher_qty
+            ')
+            ->orderBy('p.QTY_ON_HAND')
+            ->limit(6)
+            ->get()
+            ->map(function (object $row): object {
+                $qty = (float) ($row->qty_on_hand ?? 0);
+                $lower = (float) ($row->lower_qty ?? 0);
+                $criticalThreshold = max(1, $lower * 0.5);
+
+                $row->severity = $qty <= $criticalThreshold ? 'critical' : 'low';
+
+                return $row;
+            })
+            ->values();
 
         $clients = $conn->table('CLIENTS')
             ->selectRaw('CLIENT_NO as client_no, CLIENT_NAME as client_name')
@@ -506,6 +721,11 @@ class EcommerceController extends Controller
             'toDate' => $toDate,
             'clientNo' => $clientNo,
             'q' => $q,
+            'todayOverview' => $todayOverview,
+            'weeklySalesSeries' => $weeklySalesSeries,
+            'topProductsOverview' => $topProductsOverview,
+            'recentTransactions' => $recentTransactions,
+            'inventoryAlerts' => $inventoryAlerts,
             'cartCount' => $this->cart->totalQuantity(),
         ]);
     }
