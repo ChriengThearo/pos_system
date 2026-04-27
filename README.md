@@ -64,3 +64,54 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Oracle (OCI8) Setup
+
+This project uses Oracle via `yajra/laravel-oci8`.
+
+### Prerequisites
+
+- Oracle client libraries available on PATH (example: `D:\app\ASUS\product\12.1.0\dbhome_2\bin`)
+- PHP OCI8 extension enabled in the active runtime (`extension=php_oci8_19.dll`)
+- Laravel env values:
+  - `DB_CONNECTION=oracle`
+  - `DB_HOST`, `DB_PORT`, `DB_DATABASE`
+  - `DB_SERVICE` (primary)
+  - `DB_SERVICE_NAME` (compat alias)
+  - `DB_USERNAME`, `DB_PASSWORD`
+
+### Quick Verification
+
+```powershell
+php -v
+php -m | Select-String -Pattern 'oci8'
+php artisan migrate:status --database=oracle --no-interaction
+```
+
+```powershell
+@'
+<?php
+require 'vendor/autoload.php';
+$app = require 'bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+$row = Illuminate\Support\Facades\DB::connection('oracle')->selectOne('select 1 as N from dual');
+echo json_encode((array) $row);
+'@ | php
+```
+
+## Khmer TTS Setup
+
+This project triggers `khmer_tts.py` after a successful Bakong payment.
+
+Install Python dependency:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+Quick test:
+
+```powershell
+python khmer_tts.py 1 USD 0
+```

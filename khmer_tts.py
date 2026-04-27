@@ -3,7 +3,15 @@ import sys
 import os
 import ctypes
 import tempfile
-import edge_tts
+
+try:
+    import edge_tts
+except ModuleNotFoundError:
+    print(
+        "Missing Python package 'edge-tts'. Install it with: python -m pip install edge-tts",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 async def speak(text: str, output_file: str):
