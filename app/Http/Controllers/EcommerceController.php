@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -1365,7 +1366,7 @@ class EcommerceController extends Controller
             return back()->withInput()->with('error', 'Failed to create invoice: '.$e->getMessage());
         }
 
-        if ($invoiceNo !== null) {
+        if ($invoiceNo !== null && $paymentType !== 'qr') {
             $this->notifyTelegramPaymentAlert((int) $invoiceNo, (string) $paymentType, $recieveAmount, $currencyNo);
         }
 
@@ -1395,7 +1396,9 @@ class EcommerceController extends Controller
                     ->with('bakong_qr_md5', md5($qrString))
                     ->with('bakong_qr_amount', $qrAmount)
                     ->with('bakong_qr_currency', $qrCurrencyCode)
-                    ->with('bakong_qr_grand_total', $qrGrandTotal);
+                    ->with('bakong_qr_grand_total', $qrGrandTotal)
+                    ->with('bakong_qr_invoice_no', (int) $invoiceNo)
+                    ->with('bakong_qr_currency_no', $currencyNo !== null ? (int) $currencyNo : null);
             }
         }
 
@@ -1494,7 +1497,9 @@ class EcommerceController extends Controller
             return back()->withInput()->with('error', 'Unable to add invoice items: '.$e->getMessage());
         }
 
-        $this->notifyTelegramPaymentAlert($invoiceNo, (string) $paymentType, $recieveAmount, $currencyNo);
+        if ($paymentType !== 'qr') {
+            $this->notifyTelegramPaymentAlert($invoiceNo, (string) $paymentType, $recieveAmount, $currencyNo);
+        }
 
         $redirect = redirect()
             ->route('invoices.index', ['invoice_no' => $invoiceNo])
@@ -1522,7 +1527,9 @@ class EcommerceController extends Controller
                     ->with('bakong_qr_md5', md5($qrString))
                     ->with('bakong_qr_amount', $qrAmount)
                     ->with('bakong_qr_currency', $qrCurrencyCode)
-                    ->with('bakong_qr_grand_total', $qrGrandTotal);
+                    ->with('bakong_qr_grand_total', $qrGrandTotal)
+                    ->with('bakong_qr_invoice_no', (int) $invoiceNo)
+                    ->with('bakong_qr_currency_no', $currencyNo !== null ? (int) $currencyNo : null);
             }
         }
 
@@ -3454,6 +3461,7 @@ class EcommerceController extends Controller
         }
 
         $invoiceGrandTotal = (float) $request->query('grand_total', 0);
+        $invoiceNo = (int) $request->query('invoice_no', 0);
 
         try {
             $response = Http::withoutVerifying()
@@ -3478,6 +3486,34 @@ class EcommerceController extends Controller
                 $currencyArg = escapeshellarg($currency ?? 'KHR');
                 $debtArg = escapeshellarg((string) $debt);
                 pclose(popen("start /B python \"{$script}\" {$amountArg} {$currencyArg} {$debtArg}", 'r'));
+
+                // Send Telegram payment alert only after confirmed bank success.
+                // Guard with cache key to avoid duplicate sends during polling.
+                if ($invoiceNo > 0) {
+                    $sentKey = 'telegram_payment_qr_sent:'.$invoiceNo.':'.strtolower((string) $md5);
+                    $alreadySent = (bool) Cache::get($sentKey, false);
+                    if (! $alreadySent) {
+                        $order = $this->loadOrder($invoiceNo);
+                        $header = is_array($order) ? ($order['header'] ?? null) : null;
+                        $customerName = trim((string) ($header->client_name ?? 'Walk-in Customer'));
+                        if ($customerName === '') {
+                            $customerName = 'Walk-in Customer';
+                        }
+
+                        $exitCode = PaymentAlertNotifier::notifyPayment([
+                            'customer_name' => $customerName,
+                            'paid_by' => 'qr',
+                            'total' => round(max(0, $invoiceGrandTotal), 2),
+                            'paid' => round(max(0, $paidAmount), 2),
+                            'debt' => round(max(0, $debt), 2),
+                            'currency_code' => (string) ($currency ?: 'USD'),
+                        ]);
+
+                        if ($exitCode === 0) {
+                            Cache::put($sentKey, true, now()->addDays(7));
+                        }
+                    }
+                }
             }
             return response()->json(['paid' => $paid, 'amount' => $amount, 'currency' => $currency]);
         } catch (\Throwable $e) {

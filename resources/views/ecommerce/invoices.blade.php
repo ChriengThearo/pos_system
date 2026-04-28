@@ -602,7 +602,13 @@
                 const qrMd5 = @json(session('bakong_qr_md5', md5(session('bakong_qr', ''))));
                 const checkBaseUrl = @json(route('bakong.check_transaction'));
                 const bakongQrGrandTotal = @json((float) session('bakong_qr_grand_total', 0));
-                const checkUrl = checkBaseUrl + '?md5=' + encodeURIComponent(qrMd5) + '&grand_total=' + encodeURIComponent(bakongQrGrandTotal);
+                const bakongQrInvoiceNo = @json((int) session('bakong_qr_invoice_no', 0));
+                const bakongQrCurrencyNo = @json(session('bakong_qr_currency_no'));
+                const checkUrl = checkBaseUrl
+                    + '?md5=' + encodeURIComponent(qrMd5)
+                    + '&grand_total=' + encodeURIComponent(bakongQrGrandTotal)
+                    + '&invoice_no=' + encodeURIComponent(bakongQrInvoiceNo)
+                    + '&currency_no=' + encodeURIComponent(bakongQrCurrencyNo ?? '');
                 const fallbackAmount   = @json((float) session('bakong_qr_amount', 0));
                 const fallbackCurrency = @json($bakongQrCurrency);
                 let pollTimer = null;
