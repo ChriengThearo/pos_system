@@ -725,6 +725,7 @@
     $canClientDebts = \App\Support\StaffAuth::can('client-depts.read');
     $canCurrencies = \App\Support\StaffAuth::can('currencies.read');
     $canProducts = \App\Support\StaffAuth::can('products.read');
+    $canManageProducts = \App\Support\StaffAuth::can('products.manage');
     $canStockStatus = \App\Support\StaffAuth::can('stock-status.read');
     $canFutureStock = \App\Support\StaffAuth::can('future-stock.read');
     $canSystemAudit = \App\Support\StaffAuth::can('system.audit');
@@ -857,6 +858,12 @@
                     <a href="{{ route('products.index') }}" class="nav-link {{ request()->routeIs('products.index') || request()->routeIs('products.store') || request()->routeIs('products.update') || request()->routeIs('product-types.*') || request()->routeIs('alert-stocks.*') ? 'active' : '' }}">
                         <span class="nav-ico">P</span>
                         Products
+                    </a>
+                @endif
+                @if($canManageProducts)
+                    <a href="{{ route('china-store.index') }}" class="nav-link {{ request()->routeIs('china-store.*') ? 'active' : '' }}">
+                        <span class="nav-ico">C</span>
+                        China Store
                     </a>
                 @endif
                 @if($canStockStatus)

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminRbacController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\ChinaStoreController;
 use App\Http\Controllers\CurrencyController;
 use App\Http\Controllers\EcommerceController;
 use App\Http\Controllers\EmployeeController;
@@ -289,6 +290,16 @@ Route::middleware('staff.auth')->group(function (): void {
     Route::get('/product-types/{typeId}/check-usage', [ProductController::class, 'checkTypeUsage'])
         ->middleware('staff.ability:product-types.manage')
         ->name('product-types.check-usage');
+
+    Route::get('/china-store', [ChinaStoreController::class, 'index'])
+        ->middleware('staff.ability:products.manage')
+        ->name('china-store.index');
+    Route::get('/api/cj-products', [ChinaStoreController::class, 'products'])
+        ->middleware('staff.ability:products.manage')
+        ->name('china-store.products');
+    Route::post('/api/import-cj-product', [ChinaStoreController::class, 'import'])
+        ->middleware('staff.ability:products.manage')
+        ->name('china-store.import');
 
     Route::get('/oracle/deep-check', [EcommerceController::class, 'deepCheck'])
         ->middleware('staff.ability:system.audit')
