@@ -98,6 +98,7 @@
             const messageBox = document.getElementById('china-message');
             const productsGrid = document.getElementById('china-products-grid');
             const csrfToken = '{{ csrf_token() }}';
+            const placeholderImageUrl = '{{ route('china-store.image') }}';
 
             const pageCache = new Map();
             const inFlightPageRequests = new Map();
@@ -203,11 +204,13 @@
 
                 const image = document.createElement('img');
                 image.className = 'china-product-image';
-                image.src = String(product.image || 'https://via.placeholder.com/150');
+                image.src = String(product.image || placeholderImageUrl);
                 image.alt = String(product.name || 'CJ Product');
                 image.loading = 'lazy';
                 image.onerror = () => {
-                    image.src = 'https://via.placeholder.com/150';
+                    if (image.src !== placeholderImageUrl) {
+                        image.src = placeholderImageUrl;
+                    }
                 };
 
                 const title = document.createElement('h3');
@@ -223,6 +226,10 @@
                 importBtn.type = 'button';
                 importBtn.className = 'btn btn-primary';
                 importBtn.textContent = 'Import to Stock';
+                if (!product.image_token) {
+                    importBtn.disabled = true;
+                    importBtn.textContent = 'Image unavailable';
+                }
                 importBtn.addEventListener('click', () => importProduct(product, importBtn));
 
                 card.appendChild(image);
@@ -493,7 +500,7 @@
                         },
                         body: JSON.stringify({
                             name: product.name,
-                            image: product.image,
+                            image: product.image_token,
                             cost_price: product.cost_price
                         })
                     });

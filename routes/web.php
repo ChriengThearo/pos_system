@@ -297,6 +297,9 @@ Route::middleware('staff.auth')->group(function (): void {
     Route::get('/api/cj-products', [ChinaStoreController::class, 'products'])
         ->middleware('staff.ability:products.manage')
         ->name('china-store.products');
+    Route::get('/api/china-store/image', [ChinaStoreController::class, 'image'])
+        ->middleware('staff.ability:products.manage')
+        ->name('china-store.image');
     Route::post('/api/import-cj-product', [ChinaStoreController::class, 'import'])
         ->middleware('staff.ability:products.manage')
         ->name('china-store.import');

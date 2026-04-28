@@ -2,16 +2,21 @@
 
 namespace App\Support;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class CjDropshippingService
 {
+    private const PROXY_IMAGE_PATH = '/api/china-store/image';
+    private const ALLOWED_IMAGE_HOST = 'cf.cjdropshipping.com';
+
     /**
      * @return array{
      *   source:string,
-     *   products:array<int,array{name:string,image:string,cost_price:float}>,
+     *   products:array<int,array{name:string,image:string,image_token:string,cost_price:float}>,
      *   meta:array{
      *     fetched:int,
      *     total_available:int|null,
@@ -30,25 +35,36 @@ class CjDropshippingService
         $remote = $this->fetchFromApi($keyword, $pageNumber, $pageSize);
 
         if ($remote !== null) {
+            $products = $this->toPublicProducts($this->filterByKeyword($remote['products'], $keyword));
+            $meta = $remote['meta'];
+            $meta['fetched'] = count($products);
+
             return [
                 'source' => 'cj',
-                'products' => $remote['products'],
-                'meta' => $remote['meta'],
+                'products' => $products,
+                'meta' => $meta,
             ];
         }
 
-        $mockProducts = $this->paginateLocal($this->filterByKeyword($this->mockProducts(), $keyword), $pageNumber, $pageSize);
+        $mockProducts = $this->paginateLocal(
+            $this->filterByKeyword($this->mockProducts(), $keyword),
+            $pageNumber,
+            $pageSize
+        );
+        $products = $this->toPublicProducts($mockProducts['products']);
+        $meta = $mockProducts['meta'];
+        $meta['fetched'] = count($products);
 
         return [
             'source' => 'mock',
-            'products' => $mockProducts['products'],
-            'meta' => $mockProducts['meta'],
+            'products' => $products,
+            'meta' => $meta,
         ];
     }
 
     /**
      * @return array{
-     *   products:array<int,array{name:string,image:string,cost_price:float}>,
+     *   products:array<int,array{name:string,image_source:string,cost_price:float}>,
      *   meta:array{
      *     fetched:int,
      *     total_available:int|null,
@@ -186,7 +202,7 @@ class CjDropshippingService
     }
 
     /**
-     * @return array{name:string,image:string,cost_price:float}|null
+     * @return array{name:string,image_source:string,cost_price:float}|null
      */
     private function normalizeProduct(mixed $item): ?array
     {
@@ -231,7 +247,7 @@ class CjDropshippingService
 
         return [
             'name' => $name,
-            'image' => $image,
+            'image_source' => $image,
             'cost_price' => round($costPrice, 2),
         ];
     }
@@ -262,8 +278,8 @@ class CjDropshippingService
     }
 
     /**
-     * @param  array<int,array{name:string,image:string,cost_price:float}>  $products
-     * @return array<int,array{name:string,image:string,cost_price:float}>
+     * @param  array<int,array{name:string,image_source:string,cost_price:float}>  $products
+     * @return array<int,array{name:string,image_source:string,cost_price:float}>
      */
     private function filterByKeyword(array $products, string $keyword): array
     {
@@ -280,38 +296,38 @@ class CjDropshippingService
     }
 
     /**
-     * @return array<int,array{name:string,image:string,cost_price:float}>
+     * @return array<int,array{name:string,image_source:string,cost_price:float}>
      */
     private function mockProducts(): array
     {
         return [
             [
                 'name' => 'Sample Product',
-                'image' => 'https://via.placeholder.com/150',
+                'image_source' => 'https://cf.cjdropshipping.com/quick/product/c1f9aae8-2b96-4ca7-9a67-1441d9596e3d.jpg',
                 'cost_price' => 5.00,
             ],
             [
                 'name' => 'Bluetooth Earbuds TWS',
-                'image' => 'https://via.placeholder.com/150?text=Earbuds',
+                'image_source' => 'https://cf.cjdropshipping.com/quick/product/a7657750-4318-47e8-875f-b6220ac35354.jpg',
                 'cost_price' => 8.20,
             ],
             [
                 'name' => 'Portable USB Fan',
-                'image' => 'https://via.placeholder.com/150?text=USB+Fan',
+                'image_source' => 'https://cf.cjdropshipping.com/quick/product/51e88b87-4e95-4f10-814e-624df8723e85.jpg',
                 'cost_price' => 3.75,
             ],
             [
                 'name' => 'Mini LED Desk Lamp',
-                'image' => 'https://via.placeholder.com/150?text=Desk+Lamp',
+                'image_source' => 'https://cf.cjdropshipping.com/quick/product/80a7fb1b-1fdc-4d01-8d66-4503bcd31714.jpg',
                 'cost_price' => 4.60,
             ],
         ];
     }
 
     /**
-     * @param  array<int,array{name:string,image:string,cost_price:float}>  $products
+     * @param  array<int,array{name:string,image_source:string,cost_price:float}>  $products
      * @return array{
-     *   products:array<int,array{name:string,image:string,cost_price:float}>,
+     *   products:array<int,array{name:string,image_source:string,cost_price:float}>,
      *   meta:array{
      *     fetched:int,
      *     total_available:int|null,
@@ -343,6 +359,43 @@ class CjDropshippingService
         ];
     }
 
+    /**
+     * @param  array<int,array{name:string,image_source:string,cost_price:float}>  $products
+     * @return array<int,array{name:string,image:string,image_token:string,cost_price:float}>
+     */
+    private function toPublicProducts(array $products): array
+    {
+        $formatted = [];
+
+        foreach ($products as $product) {
+            $mapped = $this->toPublicProduct($product);
+            if ($mapped !== null) {
+                $formatted[] = $mapped;
+            }
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * @param  array{name:string,image_source:string,cost_price:float}  $product
+     * @return array{name:string,image:string,image_token:string,cost_price:float}|null
+     */
+    private function toPublicProduct(array $product): ?array
+    {
+        $token = $this->encodeImageToken((string) ($product['image_source'] ?? ''));
+        if ($token === null) {
+            return null;
+        }
+
+        return [
+            'name' => (string) ($product['name'] ?? ''),
+            'image' => self::PROXY_IMAGE_PATH.'?url='.rawurlencode($token),
+            'image_token' => $token,
+            'cost_price' => (float) ($product['cost_price'] ?? 0),
+        ];
+    }
+
     private function sanitizePageNumber(int $page): int
     {
         return max(1, $page);
@@ -355,6 +408,83 @@ class CjDropshippingService
         }
 
         return min($pageSize, 100);
+    }
+
+    public function encodeImageToken(string $imageUrl): ?string
+    {
+        $url = trim($imageUrl);
+        if ($url === '' || ! $this->isAllowedImageUrl($url)) {
+            return null;
+        }
+
+        $encrypted = Crypt::encryptString($url);
+
+        return rtrim(strtr(base64_encode($encrypted), '+/', '-_'), '=');
+    }
+
+    public function decodeImageToken(string $token): ?string
+    {
+        $value = trim($token);
+        if ($value === '') {
+            return null;
+        }
+
+        $padded = strtr($value, '-_', '+/');
+        $padding = strlen($padded) % 4;
+        if ($padding > 0) {
+            $padded .= str_repeat('=', 4 - $padding);
+        }
+
+        $encrypted = base64_decode($padded, true);
+        if (! is_string($encrypted) || $encrypted === '') {
+            return null;
+        }
+
+        try {
+            $decoded = Crypt::decryptString($encrypted);
+        } catch (DecryptException) {
+            return null;
+        }
+
+        $decoded = trim($decoded);
+        if ($decoded === '') {
+            return null;
+        }
+
+        $parts = parse_url($decoded);
+        if (! is_array($parts)) {
+            return null;
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        if ($scheme !== 'https' || $host === '') {
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    public function isAllowedImageUrl(string $imageUrl): bool
+    {
+        $url = trim($imageUrl);
+        if ($url === '') {
+            return false;
+        }
+
+        $parts = parse_url($url);
+        if (! is_array($parts)) {
+            return false;
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+
+        if ($scheme !== 'https' || $host === '') {
+            return false;
+        }
+
+        return $host === self::ALLOWED_IMAGE_HOST;
     }
 
     private function cacheKey(string $baseUrl, string $endpoint, string $keyword, int $page, int $pageSize): string
