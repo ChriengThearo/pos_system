@@ -18,6 +18,9 @@ Route::post('/login', [StaffAuthController::class, 'login'])->name('staff.login.
 Route::get('/logout/loading', [StaffAuthController::class, 'showLogoutLoading'])->name('staff.logout.loading');
 Route::get('/signup', [StaffAuthController::class, 'showSignup'])->name('staff.signup');
 Route::post('/signup', [StaffAuthController::class, 'signup'])->name('staff.signup.create');
+Route::get('/api/china-store/image', [ChinaStoreController::class, 'image'])
+    ->middleware('throttle:360,1')
+    ->name('china-store.image');
 
 Route::middleware('staff.auth')->group(function (): void {
     Route::get('/login/loading', [StaffAuthController::class, 'showLoginLoading'])->name('staff.login.loading');
@@ -297,9 +300,6 @@ Route::middleware('staff.auth')->group(function (): void {
     Route::get('/api/cj-products', [ChinaStoreController::class, 'products'])
         ->middleware('staff.ability:products.manage')
         ->name('china-store.products');
-    Route::get('/api/china-store/image', [ChinaStoreController::class, 'image'])
-        ->middleware('staff.ability:products.manage')
-        ->name('china-store.image');
     Route::post('/api/import-cj-product', [ChinaStoreController::class, 'import'])
         ->middleware('staff.ability:products.manage')
         ->name('china-store.import');

@@ -207,6 +207,7 @@
                 image.src = String(product.image || placeholderImageUrl);
                 image.alt = String(product.name || 'CJ Product');
                 image.loading = 'lazy';
+                image.decoding = 'async';
                 image.onerror = () => {
                     if (image.src !== placeholderImageUrl) {
                         image.src = placeholderImageUrl;
@@ -268,8 +269,9 @@
                 const current = Number(meta.current_page || page);
                 const nPage = Number(meta.next_page || (current + 1));
                 const canLoadMore = Boolean(meta.has_more);
+                const sourceReason = String(meta.source_reason || '');
 
-                return { total, fetched, current, nextPage: nPage, canLoadMore };
+                return { total, fetched, current, nextPage: nPage, canLoadMore, sourceReason };
             };
 
             const shouldAutoLoadByScroll = () => {
@@ -370,7 +372,13 @@
                             'success'
                         );
                     } else {
-                        showMessage('Loaded ' + displayedCount + ' product(s). More will load automatically.', 'success');
+                        let reasonHint = '';
+                        if (meta.sourceReason === 'missing_cj_config') {
+                            reasonHint = ' CJ API config is missing on this machine. Set CJ_BASE_URL and CJ_API_TOKEN in .env, then run php artisan optimize:clear.';
+                        } else if (meta.sourceReason !== '') {
+                            reasonHint = ' CJ API fallback reason: ' + meta.sourceReason + '.';
+                        }
+                        showMessage('Loaded ' + displayedCount + ' mock product(s).' + reasonHint, 'warning');
                     }
                 } else if (!hasMore) {
                     showMessage('Loaded all available products (' + displayedCount + ').', 'success');

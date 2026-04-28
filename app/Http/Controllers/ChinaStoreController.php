@@ -54,6 +54,11 @@ class ChinaStoreController extends Controller
             ]);
         }
 
+        $cached = $this->readProxyCachedImage($imageUrl);
+        if ($cached !== null) {
+            return $this->buildImageResponse($request, $cached['binary'], $cached['content_type'], 86400);
+        }
+
         $timeout = max(2, (int) Config::get('services.cj_dropshipping.timeout', 15));
         $maxImageBytes = max(65536, (int) Config::get('services.cj_dropshipping.max_image_bytes', 4 * 1024 * 1024));
 
@@ -96,11 +101,9 @@ class ChinaStoreController extends Controller
             return $this->placeholderImageResponse();
         }
 
-        return response($binary, 200, [
-            'Content-Type' => $contentType,
-            'Cache-Control' => 'public, max-age=300',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+        $this->storeProxyCachedImage($imageUrl, $binary, $contentType);
+
+        return $this->buildImageResponse($request, $binary, $contentType, 86400);
     }
 
     public function import(Request $request, CjDropshippingService $cjDropshipping): JsonResponse
@@ -250,42 +253,50 @@ class ChinaStoreController extends Controller
 
     private function downloadAndStoreImage(string $sourceImageUrl): ?string
     {
-        $timeout = max(2, (int) Config::get('services.cj_dropshipping.timeout', 15));
-        $maxImageBytes = max(65536, (int) Config::get('services.cj_dropshipping.max_image_bytes', 4 * 1024 * 1024));
+        $cached = $this->readProxyCachedImage($sourceImageUrl);
+        if ($cached !== null) {
+            $binary = $cached['binary'];
+            $contentType = $cached['content_type'];
+        } else {
+            $timeout = max(2, (int) Config::get('services.cj_dropshipping.timeout', 15));
+            $maxImageBytes = max(65536, (int) Config::get('services.cj_dropshipping.max_image_bytes', 4 * 1024 * 1024));
 
-        try {
-            $response = Http::timeout($timeout)
-                ->connectTimeout(min(5, $timeout))
-                ->accept('image/*')
-                ->withHeaders([
-                    'User-Agent' => 'POS-ChinaStore-Import/1.0',
-                ])
-                ->get($sourceImageUrl);
-        } catch (\Throwable $e) {
-            Log::warning('China Store import image download failed.', [
-                'message' => $e->getMessage(),
-            ]);
+            try {
+                $response = Http::timeout($timeout)
+                    ->connectTimeout(min(5, $timeout))
+                    ->accept('image/*')
+                    ->withHeaders([
+                        'User-Agent' => 'POS-ChinaStore-Import/1.0',
+                    ])
+                    ->get($sourceImageUrl);
+            } catch (\Throwable $e) {
+                Log::warning('China Store import image download failed.', [
+                    'message' => $e->getMessage(),
+                ]);
 
-            return null;
-        }
+                return null;
+            }
 
-        if (! $response->ok()) {
-            return null;
-        }
+            if (! $response->ok()) {
+                return null;
+            }
 
-        $binary = $response->body();
-        if (! is_string($binary) || $binary === '' || strlen($binary) > $maxImageBytes) {
-            return null;
-        }
+            $binary = $response->body();
+            if (! is_string($binary) || $binary === '' || strlen($binary) > $maxImageBytes) {
+                return null;
+            }
 
-        $contentType = $this->normalizeImageContentType((string) $response->header('Content-Type', ''));
-        if ($contentType === null) {
-            $detected = @getimagesizefromstring($binary);
-            $contentType = $this->normalizeImageContentType((string) ($detected['mime'] ?? ''));
-        }
+            $contentType = $this->normalizeImageContentType((string) $response->header('Content-Type', ''));
+            if ($contentType === null) {
+                $detected = @getimagesizefromstring($binary);
+                $contentType = $this->normalizeImageContentType((string) ($detected['mime'] ?? ''));
+            }
 
-        if ($contentType === null) {
-            return null;
+            if ($contentType === null) {
+                return null;
+            }
+
+            $this->storeProxyCachedImage($sourceImageUrl, $binary, $contentType);
         }
 
         $extension = $this->extensionFromImageContentType($contentType);
@@ -344,6 +355,113 @@ class ChinaStoreController extends Controller
             'image/avif' => 'avif',
             default => null,
         };
+    }
+
+    /**
+     * @return array{binary:string,content_type:string}|null
+     */
+    private function readProxyCachedImage(string $imageUrl): ?array
+    {
+        $directory = $this->proxyCacheDirectory();
+        if (! is_dir($directory)) {
+            return null;
+        }
+
+        $hash = sha1($imageUrl);
+        $pattern = $directory.DIRECTORY_SEPARATOR.$hash.'.*';
+        $files = glob($pattern);
+        if (! is_array($files) || $files === []) {
+            return null;
+        }
+
+        $ttlSeconds = max(60, (int) Config::get('services.cj_dropshipping.image_cache_ttl', 86400));
+        $now = time();
+
+        foreach ($files as $file) {
+            if (! is_string($file) || ! is_file($file)) {
+                continue;
+            }
+
+            $mtime = @filemtime($file);
+            if ($mtime !== false && ($now - $mtime) > $ttlSeconds) {
+                @unlink($file);
+                continue;
+            }
+
+            $binary = @file_get_contents($file);
+            if (! is_string($binary) || $binary === '') {
+                @unlink($file);
+                continue;
+            }
+
+            $detected = @getimagesizefromstring($binary);
+            $contentType = $this->normalizeImageContentType((string) ($detected['mime'] ?? ''));
+
+            if ($contentType === null) {
+                @unlink($file);
+                continue;
+            }
+
+            return [
+                'binary' => $binary,
+                'content_type' => $contentType,
+            ];
+        }
+
+        return null;
+    }
+
+    private function storeProxyCachedImage(string $imageUrl, string $binary, string $contentType): void
+    {
+        $extension = $this->extensionFromImageContentType($contentType);
+        if ($extension === null) {
+            return;
+        }
+
+        $directory = $this->proxyCacheDirectory();
+        if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
+            return;
+        }
+
+        $hash = sha1($imageUrl);
+        $pattern = $directory.DIRECTORY_SEPARATOR.$hash.'.*';
+        $existing = glob($pattern);
+        if (is_array($existing)) {
+            foreach ($existing as $file) {
+                if (is_string($file) && is_file($file)) {
+                    @unlink($file);
+                }
+            }
+        }
+
+        $absolutePath = $directory.DIRECTORY_SEPARATOR.$hash.'.'.$extension;
+        @file_put_contents($absolutePath, $binary);
+    }
+
+    private function proxyCacheDirectory(): string
+    {
+        return public_path('images/china-store-cache');
+    }
+
+    private function buildImageResponse(Request $request, string $binary, string $contentType, int $maxAgeSeconds): Response
+    {
+        $etag = '"'.sha1($binary).'"';
+        $ifNoneMatch = (string) $request->headers->get('If-None-Match', '');
+        if ($ifNoneMatch !== '' && str_contains($ifNoneMatch, $etag)) {
+            return response('', 304, [
+                'ETag' => $etag,
+                'Cache-Control' => 'public, max-age='.$maxAgeSeconds,
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
+        }
+
+        return response($binary, 200, [
+            'Content-Type' => $contentType,
+            'Content-Length' => (string) strlen($binary),
+            'ETag' => $etag,
+            'Cache-Control' => 'public, max-age='.$maxAgeSeconds,
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     private function placeholderImageResponse(): Response

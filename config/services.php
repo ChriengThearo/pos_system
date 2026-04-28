@@ -41,6 +41,7 @@ return [
         'page_size' => (int) env('CJ_PAGE_SIZE', 10),
         'cache_ttl' => (int) env('CJ_CACHE_TTL', 120),
         'max_image_bytes' => (int) env('CJ_MAX_IMAGE_BYTES', 4194304),
+        'image_cache_ttl' => (int) env('CJ_IMAGE_CACHE_TTL', 86400),
         'max_products' => (int) env('CJ_MAX_PRODUCTS', 1000),
     ],
 

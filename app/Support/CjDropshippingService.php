@@ -12,6 +12,7 @@ class CjDropshippingService
 {
     private const PROXY_IMAGE_PATH = '/api/china-store/image';
     private const ALLOWED_IMAGE_HOST = 'cf.cjdropshipping.com';
+    private ?string $lastFetchError = null;
 
     /**
      * @return array{
@@ -29,6 +30,7 @@ class CjDropshippingService
      */
     public function fetchProducts(string $query = '', int $page = 1, int $perPage = 10): array
     {
+        $this->lastFetchError = null;
         $keyword = trim($query);
         $pageNumber = $this->sanitizePageNumber($page);
         $pageSize = $this->sanitizePageSize($perPage);
@@ -54,6 +56,7 @@ class CjDropshippingService
         $products = $this->toPublicProducts($mockProducts['products']);
         $meta = $mockProducts['meta'];
         $meta['fetched'] = count($products);
+        $meta['source_reason'] = $this->lastFetchError ?? 'cj_api_unavailable';
 
         return [
             'source' => 'mock',
@@ -87,6 +90,7 @@ class CjDropshippingService
         $cacheTtl = max(0, (int) config('services.cj_dropshipping.cache_ttl', 120));
 
         if ($baseUrl === '' || $token === '') {
+            $this->lastFetchError = 'missing_cj_config';
             return null;
         }
 
@@ -122,12 +126,14 @@ class CjDropshippingService
                     'endpoint' => $baseUrl.$endpoint,
                     'page' => $page,
                 ]);
+                $this->lastFetchError = 'cj_api_http_'.$response->status();
 
                 return null;
             }
 
             $json = $response->json();
             if (! is_array($json)) {
+                $this->lastFetchError = 'invalid_cj_response';
                 return null;
             }
 
@@ -169,6 +175,7 @@ class CjDropshippingService
             Log::warning('CJ API request threw an exception.', [
                 'message' => $e->getMessage(),
             ]);
+            $this->lastFetchError = 'cj_api_exception';
 
             return null;
         }
