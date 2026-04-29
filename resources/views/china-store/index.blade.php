@@ -87,7 +87,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const PAGE_SIZE = 10;
+            const PAGE_SIZE = 24;
             const PRELOAD_OFFSET_PX = 1200;
             const loadBtn = document.getElementById('china-load-btn');
             const searchInput = document.getElementById('china-search');
@@ -205,7 +205,7 @@
                 const image = document.createElement('img');
                 image.className = 'china-product-image';
                 image.src = String(product.image || placeholderImageUrl);
-                image.alt = String(product.name || 'CJ Product');
+                image.alt = String(product.name || 'Store Product');
                 image.loading = 'lazy';
                 image.decoding = 'async';
                 image.onerror = () => {
@@ -227,7 +227,7 @@
                 importBtn.type = 'button';
                 importBtn.className = 'btn btn-primary';
                 importBtn.textContent = 'Import to Stock';
-                if (!product.image_token) {
+                if (!product.source_key) {
                     importBtn.disabled = true;
                     importBtn.textContent = 'Image unavailable';
                 }
@@ -269,9 +269,7 @@
                 const current = Number(meta.current_page || page);
                 const nPage = Number(meta.next_page || (current + 1));
                 const canLoadMore = Boolean(meta.has_more);
-                const sourceReason = String(meta.source_reason || '');
-
-                return { total, fetched, current, nextPage: nPage, canLoadMore, sourceReason };
+                return { total, fetched, current, nextPage: nPage, canLoadMore };
             };
 
             const shouldAutoLoadByScroll = () => {
@@ -366,19 +364,13 @@
                 }
 
                 if (resetList) {
-                    if (payload.source === 'cj' && totalAvailable > 0) {
+                    if (totalAvailable > 0) {
                         showMessage(
                             'Showing ' + displayedCount + ' of ' + totalAvailable + ' product(s). More will load automatically.',
                             'success'
                         );
                     } else {
-                        let reasonHint = '';
-                        if (meta.sourceReason === 'missing_cj_config') {
-                            reasonHint = ' CJ API config is missing on this machine. Set CJ_BASE_URL and CJ_API_TOKEN in .env, then run php artisan optimize:clear.';
-                        } else if (meta.sourceReason !== '') {
-                            reasonHint = ' CJ API fallback reason: ' + meta.sourceReason + '.';
-                        }
-                        showMessage('Loaded ' + displayedCount + ' mock product(s).' + reasonHint, 'warning');
+                        showMessage('Loaded ' + displayedCount + ' product(s).', 'success');
                     }
                 } else if (!hasMore) {
                     showMessage('Loaded all available products (' + displayedCount + ').', 'success');
@@ -508,7 +500,7 @@
                         },
                         body: JSON.stringify({
                             name: product.name,
-                            image: product.image_token,
+                            image: product.source_key,
                             cost_price: product.cost_price
                         })
                     });

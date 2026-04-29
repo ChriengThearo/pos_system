@@ -297,10 +297,10 @@ Route::middleware('staff.auth')->group(function (): void {
     Route::get('/china-store', [ChinaStoreController::class, 'index'])
         ->middleware('staff.ability:products.manage')
         ->name('china-store.index');
-    Route::get('/api/cj-products', [ChinaStoreController::class, 'products'])
+    Route::get('/api/china-store/products', [ChinaStoreController::class, 'products'])
         ->middleware('staff.ability:products.manage')
         ->name('china-store.products');
-    Route::post('/api/import-cj-product', [ChinaStoreController::class, 'import'])
+    Route::post('/api/china-store/import', [ChinaStoreController::class, 'import'])
         ->middleware('staff.ability:products.manage')
         ->name('china-store.import');
 

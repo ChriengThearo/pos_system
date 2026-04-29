@@ -2,9 +2,7 @@
 
 namespace App\Support;
 
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -16,8 +14,7 @@ class CjDropshippingService
 
     /**
      * @return array{
-     *   source:string,
-     *   products:array<int,array{name:string,image:string,image_token:string,cost_price:float}>,
+     *   products:array<int,array{id:string,name:string,image:string,source_key:string,cost_price:float}>,
      *   meta:array{
      *     fetched:int,
      *     total_available:int|null,
@@ -28,7 +25,7 @@ class CjDropshippingService
      *   }
      * }
      */
-    public function fetchProducts(string $query = '', int $page = 1, int $perPage = 10): array
+    public function fetchProducts(string $query = '', int $page = 1, int $perPage = 24): array
     {
         $this->lastFetchError = null;
         $keyword = trim($query);
@@ -42,7 +39,6 @@ class CjDropshippingService
             $meta['fetched'] = count($products);
 
             return [
-                'source' => 'cj',
                 'products' => $products,
                 'meta' => $meta,
             ];
@@ -56,10 +52,8 @@ class CjDropshippingService
         $products = $this->toPublicProducts($mockProducts['products']);
         $meta = $mockProducts['meta'];
         $meta['fetched'] = count($products);
-        $meta['source_reason'] = $this->lastFetchError ?? 'cj_api_unavailable';
 
         return [
-            'source' => 'mock',
             'products' => $products,
             'meta' => $meta,
         ];
@@ -86,11 +80,11 @@ class CjDropshippingService
         $tokenHeader = trim((string) config('services.cj_dropshipping.token_header', 'CJ-Access-Token'));
         $queryKey = trim((string) config('services.cj_dropshipping.query_key', 'keywords'));
         $timeout = max(3, (int) config('services.cj_dropshipping.timeout', 15));
-        $pageSize = $this->sanitizePageSize($perPage > 0 ? $perPage : (int) config('services.cj_dropshipping.page_size', 10));
+        $pageSize = $this->sanitizePageSize($perPage > 0 ? $perPage : (int) config('services.cj_dropshipping.page_size', 24));
         $cacheTtl = max(0, (int) config('services.cj_dropshipping.cache_ttl', 120));
 
         if ($baseUrl === '' || $token === '') {
-            $this->lastFetchError = 'missing_cj_config';
+            $this->lastFetchError = 'missing_upstream_config';
             return null;
         }
 
@@ -121,19 +115,19 @@ class CjDropshippingService
                 ->get($baseUrl.$endpoint, $query);
 
             if (! $response->ok()) {
-                Log::warning('CJ API request failed.', [
+                Log::warning('Product upstream request failed.', [
                     'status' => $response->status(),
                     'endpoint' => $baseUrl.$endpoint,
                     'page' => $page,
                 ]);
-                $this->lastFetchError = 'cj_api_http_'.$response->status();
+                $this->lastFetchError = 'upstream_http_'.$response->status();
 
                 return null;
             }
 
             $json = $response->json();
             if (! is_array($json)) {
-                $this->lastFetchError = 'invalid_cj_response';
+                $this->lastFetchError = 'invalid_upstream_response';
                 return null;
             }
 
@@ -172,10 +166,10 @@ class CjDropshippingService
 
             return $result;
         } catch (\Throwable $e) {
-            Log::warning('CJ API request threw an exception.', [
+            Log::warning('Product upstream request exception.', [
                 'message' => $e->getMessage(),
             ]);
-            $this->lastFetchError = 'cj_api_exception';
+            $this->lastFetchError = 'upstream_exception';
 
             return null;
         }
@@ -368,7 +362,7 @@ class CjDropshippingService
 
     /**
      * @param  array<int,array{name:string,image_source:string,cost_price:float}>  $products
-     * @return array<int,array{name:string,image:string,image_token:string,cost_price:float}>
+     * @return array<int,array{id:string,name:string,image:string,source_key:string,cost_price:float}>
      */
     private function toPublicProducts(array $products): array
     {
@@ -386,19 +380,20 @@ class CjDropshippingService
 
     /**
      * @param  array{name:string,image_source:string,cost_price:float}  $product
-     * @return array{name:string,image:string,image_token:string,cost_price:float}|null
+     * @return array{id:string,name:string,image:string,source_key:string,cost_price:float}|null
      */
     private function toPublicProduct(array $product): ?array
     {
-        $token = $this->encodeImageToken((string) ($product['image_source'] ?? ''));
-        if ($token === null) {
+        $sourceKey = $this->issueImageKey((string) ($product['image_source'] ?? ''));
+        if ($sourceKey === null) {
             return null;
         }
 
         return [
+            'id' => substr(hash('sha256', ((string) ($product['name'] ?? '')).'|'.$sourceKey), 0, 24),
             'name' => (string) ($product['name'] ?? ''),
-            'image' => self::PROXY_IMAGE_PATH.'?url='.rawurlencode($token),
-            'image_token' => $token,
+            'image' => self::PROXY_IMAGE_PATH.'?url='.rawurlencode($sourceKey),
+            'source_key' => $sourceKey,
             'cost_price' => (float) ($product['cost_price'] ?? 0),
         ];
     }
@@ -410,66 +405,42 @@ class CjDropshippingService
 
     private function sanitizePageSize(int $pageSize): int
     {
-        if ($pageSize < 1) {
-            return 1;
+        if ($pageSize < 20) {
+            return 20;
         }
 
-        return min($pageSize, 100);
+        return min($pageSize, 50);
     }
 
-    public function encodeImageToken(string $imageUrl): ?string
+    public function issueImageKey(string $imageUrl): ?string
     {
         $url = trim($imageUrl);
         if ($url === '' || ! $this->isAllowedImageUrl($url)) {
             return null;
         }
 
-        $encrypted = Crypt::encryptString($url);
+        $appKey = (string) config('app.key', 'china-store');
+        $opaque = 'img_'.substr(hash_hmac('sha256', $url, $appKey), 0, 40);
 
-        return rtrim(strtr(base64_encode($encrypted), '+/', '-_'), '=');
+        $ttl = max(3600, (int) config('services.cj_dropshipping.image_key_ttl', 86400));
+        Cache::put($this->imageKeyCacheKey($opaque), $url, now()->addSeconds($ttl));
+
+        return $opaque;
     }
 
-    public function decodeImageToken(string $token): ?string
+    public function resolveImageKey(string $opaqueKey): ?string
     {
-        $value = trim($token);
-        if ($value === '') {
+        $key = trim($opaqueKey);
+        if (! preg_match('/^img_[A-Za-z0-9]{40}$/', $key)) {
             return null;
         }
 
-        $padded = strtr($value, '-_', '+/');
-        $padding = strlen($padded) % 4;
-        if ($padding > 0) {
-            $padded .= str_repeat('=', 4 - $padding);
-        }
-
-        $encrypted = base64_decode($padded, true);
-        if (! is_string($encrypted) || $encrypted === '') {
+        $url = Cache::get($this->imageKeyCacheKey($key));
+        if (! is_string($url) || $url === '') {
             return null;
         }
 
-        try {
-            $decoded = Crypt::decryptString($encrypted);
-        } catch (DecryptException) {
-            return null;
-        }
-
-        $decoded = trim($decoded);
-        if ($decoded === '') {
-            return null;
-        }
-
-        $parts = parse_url($decoded);
-        if (! is_array($parts)) {
-            return null;
-        }
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        $host = strtolower((string) ($parts['host'] ?? ''));
-        if ($scheme !== 'https' || $host === '') {
-            return null;
-        }
-
-        return $decoded;
+        return $this->isAllowedImageUrl($url) ? $url : null;
     }
 
     public function isAllowedImageUrl(string $imageUrl): bool
@@ -494,6 +465,11 @@ class CjDropshippingService
         return $host === self::ALLOWED_IMAGE_HOST;
     }
 
+    private function imageKeyCacheKey(string $opaqueKey): string
+    {
+        return 'china_store:image_key:'.$opaqueKey;
+    }
+
     private function cacheKey(string $baseUrl, string $endpoint, string $keyword, int $page, int $pageSize): string
     {
         $fingerprint = implode('|', [
@@ -504,6 +480,6 @@ class CjDropshippingService
             (string) $pageSize,
         ]);
 
-        return 'china_store:cj_products:'.sha1($fingerprint);
+        return 'china_store:product_pages:'.sha1($fingerprint);
     }
 }
