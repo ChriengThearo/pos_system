@@ -92,9 +92,11 @@ class StockAlertNotifier
             return 1;
         }
 
-        $pythonBin = trim((string) env('TELEGRAM_PYTHON_BIN', 'python'));
-        if ($pythonBin === '') {
-            $pythonBin = 'python';
+        $pythonBin = PythonExecutable::resolve((string) env('TELEGRAM_PYTHON_BIN', 'python'));
+        if ($pythonBin === null) {
+            Log::warning('Python runtime is not available for Telegram stock alerts. Set TELEGRAM_PYTHON_BIN or install Python.');
+
+            return 1;
         }
 
         $command = [$pythonBin, $script, '--once'];

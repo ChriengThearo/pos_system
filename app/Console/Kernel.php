@@ -2,6 +2,7 @@
 
 namespace App\Console;
 
+use App\Support\StockAlertNotifier;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
@@ -19,7 +20,10 @@ class Kernel extends ConsoleKernel
             $script = base_path('python/telegram/stock_alert_monitor.py');
             if (is_file($script)) {
                 $schedule
-                    ->exec('python "'.$script.'" --once')
+                    ->call(static function (): void {
+                        StockAlertNotifier::runMonitorOnce();
+                    })
+                    ->name('telegram-stock-alert-monitor')
                     ->everyMinute()
                     ->withoutOverlapping();
             }

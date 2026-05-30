@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\BakongQR;
 use App\Support\PaymentAlertNotifier;
+use App\Support\PythonExecutable;
 use App\Support\SessionCart;
 use App\Support\StaffAuth;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
@@ -3482,10 +3483,14 @@ class EcommerceController extends Controller
 
                 // Fire-and-forget: play Khmer TTS sound
                 $script = base_path('python/system_speech/khmer_tts.py');
-                $amountArg = escapeshellarg((string) ($amount ?? '0'));
-                $currencyArg = escapeshellarg($currency ?? 'KHR');
-                $debtArg = escapeshellarg((string) $debt);
-                pclose(popen("start /B python \"{$script}\" {$amountArg} {$currencyArg} {$debtArg}", 'r'));
+                $pythonBin = PythonExecutable::resolve((string) env('SYSTEM_SPEECH_PYTHON_BIN', env('TELEGRAM_PYTHON_BIN', 'python')));
+                if ($pythonBin !== null) {
+                    $amountArg = escapeshellarg((string) ($amount ?? '0'));
+                    $currencyArg = escapeshellarg($currency ?? 'KHR');
+                    $debtArg = escapeshellarg((string) $debt);
+                    $pythonArg = escapeshellarg($pythonBin);
+                    pclose(popen("start /B \"\" {$pythonArg} \"{$script}\" {$amountArg} {$currencyArg} {$debtArg}", 'r'));
+                }
 
                 // Send Telegram payment alert only after confirmed bank success.
                 // Guard with cache key to avoid duplicate sends during polling.

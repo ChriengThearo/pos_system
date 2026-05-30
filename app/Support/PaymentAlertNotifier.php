@@ -51,9 +51,11 @@ class PaymentAlertNotifier
             $currencyCode = 'USD';
         }
 
-        $pythonBin = trim((string) env('TELEGRAM_PYTHON_BIN', 'python'));
-        if ($pythonBin === '') {
-            $pythonBin = 'python';
+        $pythonBin = PythonExecutable::resolve((string) env('TELEGRAM_PYTHON_BIN', 'python'));
+        if ($pythonBin === null) {
+            Log::warning('Python runtime is not available for Telegram payment alerts. Set TELEGRAM_PYTHON_BIN or install Python.');
+
+            return 1;
         }
 
         $command = [
