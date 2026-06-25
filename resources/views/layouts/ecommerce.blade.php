@@ -803,7 +803,7 @@
         <aside class="sidebar">
             <nav class="nav" style="margin-top: 14px;">
                 <div class="nav-section">Main</div>
-                @if($canDashboardManage || $canDashboardRead)
+                @if(($canDashboardManage || $canDashboardRead) && ! \App\Support\StaffAuth::hasRole('CASHIER'))
                     <a href="{{ $dashboardUrl }}" class="nav-link {{ $dashboardActive ? 'active' : '' }}">
                         <span class="nav-ico">D</span>
                         {{ $canDashboardManage ? 'Admin Dashboard' : 'Dashboard' }}
