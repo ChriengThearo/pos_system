@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
         :root {
             --bg: #f6f8fa;
@@ -21,10 +22,11 @@
             --border: #d6dfeb;
             --shadow: 0 18px 44px rgba(16, 24, 32, 0.1);
             --appbar: #d9dfe5;
-            --sidebar-bg: #2f3b45;
-            --sidebar-text: #e6eef5;
-            --sidebar-muted: #a7b2bf;
-            --sidebar-active: #1e2a33;
+            --sidebar-bg: #ffffff;
+            --sidebar-text: #4f5a8f;
+            --sidebar-muted: #7f89a8;
+            --sidebar-active: #eef3f8;
+            --sidebar-accent: #049461;
             --appbar-height: 56px;
         }
 
@@ -104,7 +106,8 @@
             color: var(--sidebar-text);
             border-radius: 0;
             box-shadow: none;
-            padding: 16px 14px;
+            border-right: 1px solid #e8edf3;
+            padding: 0;
             min-height: calc(100vh - var(--appbar-height));
             display: flex;
             flex-direction: column;
@@ -139,7 +142,8 @@
 
         .nav {
             display: grid;
-            gap: 8px;
+            gap: 0;
+            border-top: 1px solid #edf0f4;
         }
 
         .nav-section {
@@ -153,36 +157,35 @@
         .nav-link {
             font-size: .9rem;
             color: var(--sidebar-text);
-            padding: 8px 12px;
-            border-radius: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
             transition: all .2s ease;
             border: 1px solid transparent;
             display: block;
         }
 
         .nav-link:hover {
-            color: #fff;
+            color: var(--sidebar-accent);
             border-color: transparent;
-            background: rgba(255, 255, 255, 0.08);
+            background: #f7fafc;
         }
 
         .nav-link.active {
-            color: #fff;
+            color: var(--sidebar-accent);
             border-color: transparent;
             background: var(--sidebar-active);
         }
 
-        .nav-link .nav-ico {
+        .nav-ico {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 18px;
-            height: 18px;
+            width: 24px;
+            height: 24px;
             border-radius: 4px;
-            background: rgba(255, 255, 255, 0.12);
-            color: #c9d6e2;
-            font-size: .75rem;
-            margin-right: 8px;
+            color: #4f5a8f;
+            font-size: 1.45rem;
+            flex: 0 0 24px;
         }
 
         .nav-badge {
@@ -196,15 +199,199 @@
             line-height: 1;
         }
 
+        .sidebar-toggle {
+            border: none;
+            background: var(--sidebar-accent);
+            color: #ffffff;
+            font-size: 1.45rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 18px;
+            width: 100%;
+            height: 56px;
+            border-radius: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+            transition: background-color .18s ease;
+        }
+
+        .sidebar-toggle:hover {
+            background: #057c54;
+        }
+
+        .toggle-label {
+            font-size: .82rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .layout {
+            transition: grid-template-columns .18s ease;
+        }
+
+        .layout.sidebar-collapsed {
+            grid-template-columns: 74px minmax(0, 1fr);
+        }
+
+        .sidebar {
+            width: 100%;
+            overflow: visible;
+            transition: padding .18s ease;
+        }
+
+        .sidebar.collapsed {
+            align-items: stretch;
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-trigger {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            font: inherit;
+            text-align: left;
+            border: 1px solid transparent;
+            background: none;
+            color: var(--sidebar-text);
+            cursor: pointer;
+            border-radius: 0;
+            padding: 16px 18px;
+            font-size: .9rem;
+            transition: all .2s ease;
+            min-height: 62px;
+            border-bottom-color: #edf0f4;
+        }
+
+        .nav-trigger:hover {
+            color: var(--sidebar-accent);
+            background: #f7fafc;
+        }
+
+        .nav-trigger.active {
+            color: var(--sidebar-accent);
+            background: var(--sidebar-active);
+        }
+
+        .nav-trigger.active .nav-ico,
+        .nav-trigger:hover .nav-ico {
+            color: var(--sidebar-accent);
+        }
+
+        .nav-label {
+            white-space: nowrap;
+        }
+
+        .nav-flyout-title {
+            display: none;
+            font-weight: 700;
+            font-size: .76rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--sidebar-muted);
+            padding: 4px 10px 8px;
+        }
+
+        .nav-children {
+            display: none;
+        }
+
+        .sidebar:not(.collapsed) .nav-item.open > .nav-children {
+            display: grid;
+            gap: 6px;
+            padding: 6px 12px 12px 42px;
+            border-bottom: 1px solid #edf0f4;
+            background: #fbfcfe;
+        }
+
+        .sidebar.collapsed .sidebar-toggle {
+            justify-content: center;
+            padding: 0;
+        }
+
+        .sidebar.collapsed .toggle-label {
+            display: none;
+        }
+
+        .sidebar.collapsed .nav-item {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 0;
+        }
+
+        .sidebar.collapsed .nav-trigger {
+            width: 100%;
+            height: 62px;
+            justify-content: center;
+            padding: 0;
+            border-radius: 0;
+        }
+
+        .sidebar.collapsed .nav-label {
+            display: none;
+        }
+
+        .sidebar.collapsed .nav-item .nav-children {
+            position: absolute;
+            left: 100%;
+            top: 0;
+            margin-left: 0;
+            min-width: 210px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0 10px 10px 0;
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+            padding: 10px;
+            z-index: 50;
+            grid-gap: 4px;
+        }
+
+        .sidebar.collapsed .nav-item:hover .nav-children {
+            display: grid;
+        }
+
+        .sidebar.collapsed .nav-flyout-title {
+            display: block;
+        }
+
+        .sidebar.collapsed .nav-section {
+            display: none;
+        }
+
+        .sidebar.collapsed .staff-meta {
+            display: none;
+        }
+
+        .sidebar.collapsed .logout-btn {
+            width: 100%;
+            min-height: 50px;
+            border-radius: 0;
+            padding: 0;
+        }
+
+        .sidebar.collapsed .logout-btn span {
+            display: none;
+        }
+
+        .sidebar.collapsed .logout-btn i {
+            font-size: 1.35rem;
+        }
+
         .staff-meta {
             display: inline-flex;
             align-items: center;
             gap: 8px;
             padding: 8px 10px;
             border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.06);
-            color: #e6eef5;
+            border: 1px solid #edf0f4;
+            background: #f8fafc;
+            color: var(--sidebar-text);
             font-size: .8rem;
             line-height: 1.25;
         }
@@ -212,18 +399,22 @@
         .staff-meta strong {
             display: block;
             font-size: .84rem;
-            color: #ffffff;
+            color: #1b2a40;
         }
 
         .logout-btn {
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: transparent;
-            color: #e6eef5;
+            border: 1px solid #edf0f4;
+            background: #ffffff;
+            color: var(--sidebar-text);
             border-radius: 9px;
             font-size: .8rem;
             font-weight: 700;
             padding: 8px 10px;
             cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .content {
@@ -694,6 +885,7 @@
         @media (max-width: 760px) {
             .shell { width: 100%; }
             .layout { grid-template-columns: 1fr; }
+            .layout.sidebar-collapsed { grid-template-columns: 1fr; }
             .sidebar { position: static; }
             .brand { justify-content: flex-start; }
             .appbar-search input { width: 140px; }
@@ -786,119 +978,203 @@
     } catch (\Throwable) {
         // Keep UI alert flow resilient even if Telegram check fails.
     }
+
+    $navGroups = [
+        [
+            'key' => 'home',
+            'icon' => 'bi-house-door-fill',
+            'label' => 'Home',
+            'items' => [
+                [
+                    'show' => ($canDashboardManage || $canDashboardRead) && ! \App\Support\StaffAuth::hasRole('CASHIER'),
+                    'url' => $dashboardUrl,
+                    'label' => $canDashboardManage ? 'Admin Dashboard' : 'Dashboard',
+                    'active' => $dashboardActive,
+                ],
+                [
+                    'show' => $canShop,
+                    'url' => $canShop ? route('store.catalog') : null,
+                    'label' => 'Shop',
+                    'active' => request()->routeIs('store.catalog'),
+                ],
+            ],
+        ],
+        [
+            'key' => 'sales',
+            'icon' => 'bi-receipt-cutoff',
+            'label' => 'Sales',
+            'items' => [
+                [
+                    'show' => $canInvoices,
+                    'url' => $canInvoices ? route('invoices.index') : null,
+                    'label' => 'Invoices',
+                    'active' => request()->routeIs('invoices.*'),
+                ],
+                [
+                    'show' => $canClientDebts,
+                    'url' => $canClientDebts ? route('client-depts.index') : null,
+                    'label' => 'Client Debts',
+                    'active' => request()->routeIs('client-depts.*'),
+                    'badge' => $clientDeptCount > 0 ? $clientDeptCount : null,
+                ],
+                [
+                    'show' => $canClients,
+                    'url' => $canClients ? route('clients.index') : null,
+                    'label' => 'Clients',
+                    'active' => request()->routeIs('clients.*') || request()->routeIs('client-types.*'),
+                ],
+                [
+                    'show' => $canCheckout,
+                    'url' => $canCheckout ? route('store.cart') : null,
+                    'label' => 'Checkout',
+                    'active' => request()->routeIs('store.cart*') || request()->routeIs('store.checkout*'),
+                ],
+                [
+                    'show' => $canTotalSales,
+                    'url' => $canTotalSales ? route('total-sales.index') : null,
+                    'label' => 'Total Sales Orders',
+                    'active' => request()->routeIs('total-sales.*'),
+                ],
+                [
+                    'show' => $canOrders,
+                    'url' => $canOrders ? route('store.orders') : null,
+                    'label' => 'Orders',
+                    'active' => request()->routeIs('store.orders*'),
+                ],
+            ],
+        ],
+        [
+            'key' => 'inventory',
+            'icon' => 'bi-layers-fill',
+            'label' => 'Inventory',
+            'items' => [
+                [
+                    'show' => $canProducts,
+                    'url' => $canProducts ? route('products.index') : null,
+                    'label' => 'Products',
+                    'active' => request()->routeIs('products.index') || request()->routeIs('products.store') || request()->routeIs('products.update') || request()->routeIs('product-types.*') || request()->routeIs('alert-stocks.*'),
+                ],
+                [
+                    'show' => $canStockStatus,
+                    'url' => $canStockStatus ? route('products.status') : null,
+                    'label' => 'Product Status',
+                    'active' => request()->routeIs('products.status'),
+                    'badge' => $underStockCount > 0 ? $underStockCount : null,
+                ],
+                [
+                    'show' => $canFutureStock,
+                    'url' => $canFutureStock ? route('products.status.future') : null,
+                    'label' => 'Analyst Future',
+                    'active' => request()->routeIs('products.status.future'),
+                ],
+                [
+                    'show' => $canSystemAudit,
+                    'url' => $canSystemAudit ? route('store.deep-check') : null,
+                    'label' => 'Deep Check',
+                    'active' => request()->routeIs('store.deep-check'),
+                ],
+            ],
+        ],
+        [
+            'key' => 'purchases',
+            'icon' => 'bi-truck',
+            'label' => 'Purchases',
+            'items' => [
+                [
+                    'show' => $canPurchases,
+                    'url' => $canPurchases ? route('purchases.index') : null,
+                    'label' => 'Purchases',
+                    'active' => request()->routeIs('purchases.index') || request()->routeIs('purchases.history') || request()->routeIs('purchases.store') || request()->routeIs('purchases.items.*'),
+                ],
+                [
+                    'show' => $canManageProducts,
+                    'url' => $canManageProducts ? route('china-store.index') : null,
+                    'label' => 'China Store',
+                    'active' => request()->routeIs('china-store.*'),
+                ],
+            ],
+        ],
+        [
+            'key' => 'employees',
+            'icon' => 'bi-person-badge-fill',
+            'label' => 'Employees',
+            'items' => [
+                [
+                    'show' => $canEmployees,
+                    'url' => $canEmployees ? route('employees.index') : null,
+                    'label' => 'Employees',
+                    'active' => request()->routeIs('employees.*'),
+                ],
+                [
+                    'show' => $canJobs,
+                    'url' => $canJobs ? route('jobs.index') : null,
+                    'label' => 'Jobs',
+                    'active' => request()->routeIs('jobs.*'),
+                ],
+            ],
+        ],
+        [
+            'key' => 'setting',
+            'icon' => 'bi-tools',
+            'label' => 'Setting',
+            'items' => [
+                [
+                    'show' => $canCurrencies,
+                    'url' => $canCurrencies ? route('currencies.index') : null,
+                    'label' => 'Currencies',
+                    'active' => request()->routeIs('currencies.*'),
+                ],
+            ],
+        ],
+    ];
+
+    foreach ($navGroups as &$navGroup) {
+        $navGroup['items'] = array_values(array_filter($navGroup['items'], fn ($item) => $item['show']));
+        $navGroup['hasActive'] = collect($navGroup['items'])->contains('active', true);
+    }
+    unset($navGroup);
+    $navGroups = array_values(array_filter($navGroups, fn ($group) => count($group['items']) > 0));
 @endphp
 <div class="shell">
     <header class="appbar">
-        <a href="{{ route('dashboard.entry') }}" class="brand">
-            @if($storeLogoExists)
-                <img src="{{ asset($storeLogoPath) }}" alt="{{ $storeName }} logo" class="brand-logo">
-            @else
-                <span class="brand-dot"></span>
-            @endif
-            <span>{{ $storeName }}</span>
-        </a>
+        <div style="display: flex; align-items: center;">
+            <a href="{{ route('dashboard.entry') }}" class="brand">
+                @if($storeLogoExists)
+                    <img src="{{ asset($storeLogoPath) }}" alt="{{ $storeName }} logo" class="brand-logo">
+                @else
+                    <span class="brand-dot"></span>
+                @endif
+                <span>{{ $storeName }}</span>
+            </a>
+        </div>
         <!-- search removed -->
     </header>
     <div class="layout">
         <aside class="sidebar">
-            <nav class="nav" style="margin-top: 14px;">
-                <div class="nav-section">Main</div>
-                @if(($canDashboardManage || $canDashboardRead) && ! \App\Support\StaffAuth::hasRole('CASHIER'))
-                    <a href="{{ $dashboardUrl }}" class="nav-link {{ $dashboardActive ? 'active' : '' }}">
-                        <span class="nav-ico">D</span>
-                        {{ $canDashboardManage ? 'Admin Dashboard' : 'Dashboard' }}
-                    </a>
-                @endif
-                @if($canShop)
-                    <a href="{{ route('store.catalog') }}" class="nav-link {{ request()->routeIs('store.catalog') ? 'active' : '' }}">
-                        <span class="nav-ico">S</span>
-                        Shop
-                    </a>
-                @endif
-                @if($canTotalSales)
-                    <a href="{{ route('total-sales.index') }}" class="nav-link {{ request()->routeIs('total-sales.*') ? 'active' : '' }}">
-                        <span class="nav-ico">T</span>
-                        Total Sales
-                    </a>
-                @endif
-                @if($canInvoices)
-                    <a href="{{ route('invoices.index') }}" class="nav-link {{ request()->routeIs('invoices.*') ? 'active' : '' }}">
-                        <span class="nav-ico">I</span>
-                        Invoices
-                    </a>
-                @endif
-                @if($canPurchases)
-                    <a href="{{ route('purchases.index') }}" class="nav-link {{ request()->routeIs('purchases.index') || request()->routeIs('purchases.history') || request()->routeIs('purchases.store') || request()->routeIs('purchases.items.*') ? 'active' : '' }}">
-                        <span class="nav-ico">P</span>
-                        Purchases
-                    </a>
-                @endif
-                @if($canClients)
-                    <a href="{{ route('clients.index') }}" class="nav-link {{ request()->routeIs('clients.*') || request()->routeIs('client-types.*') ? 'active' : '' }}">
-                        <span class="nav-ico">C</span>
-                        Clients
-                    </a>
-                @endif
-                @if($canClientDebts)
-                    <a href="{{ route('client-depts.index') }}" class="nav-link {{ request()->routeIs('client-depts.*') ? 'active' : '' }}" style="display: flex; align-items: center; gap: 8px;">
-                        <span class="nav-ico">D</span>
-                        Client Debts
-                        @if($clientDeptCount > 0)
-                            <span class="nav-badge">{{ $clientDeptCount }}</span>
-                        @endif
-                    </a>
-                @endif
-                @if($canCurrencies)
-                    <a href="{{ route('currencies.index') }}" class="nav-link {{ request()->routeIs('currencies.*') ? 'active' : '' }}">
-                        <span class="nav-ico">Y</span>
-                        Currencies
-                    </a>
-                @endif
-                @if($canProducts)
-                    <a href="{{ route('products.index') }}" class="nav-link {{ request()->routeIs('products.index') || request()->routeIs('products.store') || request()->routeIs('products.update') || request()->routeIs('product-types.*') || request()->routeIs('alert-stocks.*') ? 'active' : '' }}">
-                        <span class="nav-ico">P</span>
-                        Products
-                    </a>
-                @endif
-                @if($canManageProducts)
-                    <a href="{{ route('china-store.index') }}" class="nav-link {{ request()->routeIs('china-store.*') ? 'active' : '' }}">
-                        <span class="nav-ico">C</span>
-                        China Store
-                    </a>
-                @endif
-                @if($canStockStatus)
-                    <a href="{{ route('products.status') }}" class="nav-link {{ request()->routeIs('products.status') ? 'active' : '' }}" style="display: flex; align-items: center; gap: 8px;">
-                        <span class="nav-ico">S</span>
-                        Product Status
-                        @if($underStockCount > 0)
-                            <span class="nav-badge">{{ $underStockCount }}</span>
-                        @endif
-                    </a>
-                @endif
-                @if($canFutureStock)
-                    <a href="{{ route('products.status.future') }}" class="nav-link {{ request()->routeIs('products.status.future') ? 'active' : '' }}">
-                        <span class="nav-ico">F</span>
-                        Analyst Future
-                    </a>
-                @endif
-                @if($canEmployees)
-                    <a href="{{ route('employees.index') }}" class="nav-link {{ request()->routeIs('employees.*') ? 'active' : '' }}">
-                        <span class="nav-ico">E</span>
-                        Employees
-                    </a>
-                @endif
-                @if($canJobs)
-                    <a href="{{ route('jobs.index') }}" class="nav-link {{ request()->routeIs('jobs.*') ? 'active' : '' }}">
-                        <span class="nav-ico">J</span>
-                        Jobs
-                    </a>
-                @endif
-                @if($canSystemAudit)
-                    <a href="{{ route('store.deep-check') }}" class="nav-link {{ request()->routeIs('store.deep-check') ? 'active' : '' }}">
-                        <span class="nav-ico">A</span>
-                        Deep Check
-                    </a>
-                @endif
+            <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Minimize navigation" aria-expanded="true">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                <span class="toggle-label">Minimize</span>
+            </button>
+            <nav class="nav">
+                @foreach ($navGroups as $group)
+                    <div class="nav-item {{ $group['hasActive'] ? 'open' : '' }}">
+                        <button type="button" class="nav-trigger {{ $group['hasActive'] ? 'active' : '' }}" title="{{ $group['label'] }}" aria-label="{{ $group['label'] }}">
+                            <i class="bi {{ $group['icon'] }} nav-ico" aria-hidden="true"></i>
+                            <span class="nav-label">{{ $group['label'] }}</span>
+                        </button>
+                        <div class="nav-children">
+                            <div class="nav-flyout-title">{{ $group['label'] }}</div>
+                            @foreach ($group['items'] as $item)
+                                <a href="{{ $item['url'] }}" class="nav-link {{ $item['active'] ? 'active' : '' }}" style="display: flex; align-items: center; gap: 8px;">
+                                    {{ $item['label'] }}
+                                    @if(!empty($item['badge']))
+                                        <span class="nav-badge">{{ $item['badge'] }}</span>
+                                    @endif
+                                </a>
+                            @endforeach
+                        </div>
+                    </div>
+                @endforeach
             </nav>
 
             <div style="margin-top: auto;">
@@ -911,7 +1187,10 @@
                     </div>
                     <form method="POST" action="{{ route('staff.logout') }}" style="margin-top: 10px;">
                         @csrf
-                        <button type="submit" class="logout-btn">Logout</button>
+                        <button type="submit" class="logout-btn">
+                            <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                            <span>Logout</span>
+                        </button>
                     </form>
                 @endif
             </div>
@@ -975,5 +1254,45 @@
         })();
     </script>
 @endif
+<script>
+    (function () {
+        const layout = document.querySelector('.layout');
+        const sidebar = document.querySelector('.sidebar');
+        const toggleBtn = document.getElementById('sidebarToggle');
+        if (!layout || !sidebar || !toggleBtn) return;
+
+        const STORAGE_KEY = 'pos-sidebar-collapsed';
+
+        function applyState(collapsed) {
+            sidebar.classList.toggle('collapsed', collapsed);
+            layout.classList.toggle('sidebar-collapsed', collapsed);
+            toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+            toggleBtn.setAttribute('aria-label', collapsed ? 'Open navigation' : 'Minimize navigation');
+
+            const icon = toggleBtn.querySelector('i');
+            if (icon) {
+                icon.className = collapsed ? 'bi bi-chevron-right' : 'bi bi-chevron-left';
+            }
+        }
+
+        applyState(localStorage.getItem(STORAGE_KEY) === '1');
+
+        toggleBtn.addEventListener('click', () => {
+            const collapsed = !sidebar.classList.contains('collapsed');
+            applyState(collapsed);
+            localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
+        });
+
+        sidebar.querySelectorAll('.nav-trigger').forEach((trigger) => {
+            trigger.addEventListener('click', () => {
+                if (sidebar.classList.contains('collapsed')) return;
+                const item = trigger.closest('.nav-item');
+                const isOpen = item.classList.contains('open');
+                sidebar.querySelectorAll('.nav-item.open').forEach((el) => el.classList.remove('open'));
+                if (!isOpen) item.classList.add('open');
+            });
+        });
+    })();
+</script>
 </body>
 </html>
