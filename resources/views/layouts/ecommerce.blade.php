@@ -23,10 +23,11 @@
             --shadow: 0 18px 44px rgba(16, 24, 32, 0.1);
             --appbar: #d9dfe5;
             --sidebar-bg: #ffffff;
-            --sidebar-text: #4f5a8f;
+            --sidebar-text: #111b4d;
             --sidebar-muted: #7f89a8;
             --sidebar-active: #eef3f8;
             --sidebar-accent: #049461;
+            --sidebar-icon: #a6aac9;
             --appbar-height: 56px;
         }
 
@@ -157,23 +158,25 @@
         .nav-link {
             font-size: .9rem;
             color: var(--sidebar-text);
-            padding: 10px 12px;
-            border-radius: 8px;
+            padding: 16px 24px;
+            border-radius: 0;
             transition: all .2s ease;
-            border: 1px solid transparent;
+            border: 0;
+            border-bottom: 1px solid #dbe2ea;
             display: block;
+            min-height: 51px;
+            background: #eef2f6;
+            font-weight: 700;
         }
 
         .nav-link:hover {
-            color: var(--sidebar-accent);
-            border-color: transparent;
-            background: #f7fafc;
+            color: var(--sidebar-text);
+            background: #e5ebf2;
         }
 
         .nav-link.active {
-            color: var(--sidebar-accent);
-            border-color: transparent;
-            background: var(--sidebar-active);
+            color: var(--sidebar-text);
+            background: #dfe6ee;
         }
 
         .nav-ico {
@@ -183,7 +186,7 @@
             width: 24px;
             height: 24px;
             border-radius: 4px;
-            color: #4f5a8f;
+            color: var(--sidebar-icon);
             font-size: 1.45rem;
             flex: 0 0 24px;
         }
@@ -253,39 +256,56 @@
         .nav-trigger {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 18px;
             width: 100%;
             font: inherit;
             text-align: left;
             border: 1px solid transparent;
-            background: none;
+            background: #ffffff;
             color: var(--sidebar-text);
             cursor: pointer;
             border-radius: 0;
-            padding: 16px 18px;
-            font-size: .9rem;
+            padding: 0 24px;
+            font-size: 1rem;
+            font-weight: 800;
             transition: all .2s ease;
             min-height: 62px;
             border-bottom-color: #edf0f4;
         }
 
         .nav-trigger:hover {
-            color: var(--sidebar-accent);
-            background: #f7fafc;
+            color: var(--sidebar-text);
+            background: #f8fafc;
         }
 
         .nav-trigger.active {
-            color: var(--sidebar-accent);
-            background: var(--sidebar-active);
+            color: var(--sidebar-text);
+            background: #ffffff;
         }
 
-        .nav-trigger.active .nav-ico,
-        .nav-trigger:hover .nav-ico {
-            color: var(--sidebar-accent);
+        .nav-item.open > .nav-trigger {
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
+        }
+
+        .nav-trigger.active .nav-ico {
+            color: var(--sidebar-icon);
         }
 
         .nav-label {
             white-space: nowrap;
+        }
+
+        .nav-caret {
+            margin-left: auto;
+            color: var(--sidebar-text);
+            font-size: .85rem;
+            transition: transform .18s ease;
+        }
+
+        .nav-item.open > .nav-trigger .nav-caret {
+            transform: rotate(180deg);
         }
 
         .nav-flyout-title {
@@ -304,10 +324,10 @@
 
         .sidebar:not(.collapsed) .nav-item.open > .nav-children {
             display: grid;
-            gap: 6px;
-            padding: 6px 12px 12px 42px;
+            gap: 0;
+            padding: 0;
             border-bottom: 1px solid #edf0f4;
-            background: #fbfcfe;
+            background: #eef2f6;
         }
 
         .sidebar.collapsed .sidebar-toggle {
@@ -337,6 +357,10 @@
             display: none;
         }
 
+        .sidebar.collapsed .nav-caret {
+            display: none;
+        }
+
         .sidebar.collapsed .nav-item .nav-children {
             position: absolute;
             left: 100%;
@@ -347,7 +371,7 @@
             border: 1px solid #e2e8f0;
             border-radius: 0 10px 10px 0;
             box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
-            padding: 10px;
+            padding: 0;
             z-index: 50;
             grid-gap: 4px;
         }
@@ -1161,6 +1185,7 @@
                         <button type="button" class="nav-trigger {{ $group['hasActive'] ? 'active' : '' }}" title="{{ $group['label'] }}" aria-label="{{ $group['label'] }}">
                             <i class="bi {{ $group['icon'] }} nav-ico" aria-hidden="true"></i>
                             <span class="nav-label">{{ $group['label'] }}</span>
+                            <i class="bi bi-chevron-down nav-caret" aria-hidden="true"></i>
                         </button>
                         <div class="nav-children">
                             <div class="nav-flyout-title">{{ $group['label'] }}</div>
