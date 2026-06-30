@@ -102,6 +102,7 @@
         .sidebar {
             position: sticky;
             top: var(--appbar-height);
+            z-index: 100;
             align-self: start;
             background: var(--sidebar-bg);
             color: var(--sidebar-text);
@@ -372,7 +373,7 @@
             border-radius: 0 10px 10px 0;
             box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
             padding: 0;
-            z-index: 50;
+            z-index: 200;
             grid-gap: 4px;
         }
 
@@ -442,6 +443,8 @@
         }
 
         .content {
+            position: relative;
+            z-index: 1;
             display: grid;
             gap: 14px;
             padding: 18px 20px 40px;
