@@ -6,6 +6,245 @@
     @php
         use Illuminate\Support\Str;
     @endphp
+    <style>
+        #product-list-panel .product-list-wrap {
+            margin-top: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #product-list-panel .product-list-body {
+            display: grid;
+        }
+
+        #product-list-panel .product-list-row {
+            display: grid;
+            grid-template-columns: minmax(280px, 1.35fr) minmax(150px, .8fr) minmax(110px, .45fr) 56px;
+            align-items: center;
+            gap: 18px;
+            min-height: 92px;
+            padding: 10px 18px 10px 22px;
+            border-bottom: 1px solid #e7edf5;
+            background: #fff;
+        }
+
+        #product-list-panel .product-list-row:last-child {
+            border-bottom: 0;
+        }
+
+        #product-list-panel .product-list-identity {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            gap: 14px;
+        }
+
+        #product-list-panel .product-list-photo,
+        #product-list-panel .product-list-photo-empty {
+            width: 62px;
+            height: 62px;
+            border-radius: 8px;
+            flex: 0 0 62px;
+            border: 1px solid #c8d2df;
+            background: #eef3f8;
+        }
+
+        #product-list-panel .product-list-photo {
+            object-fit: cover;
+        }
+
+        #product-list-panel .product-list-photo-empty {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #8a98aa;
+            font-size: 1.35rem;
+        }
+
+        #product-list-panel .row-photo-carousel {
+            display: inline-flex;
+            align-items: center;
+            flex: 0 0 auto;
+            gap: 2px;
+        }
+
+        #product-list-panel .product-list-photo-arrow {
+            border: 0;
+            background: transparent;
+            color: #8a98aa;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            flex: 0 0 auto;
+        }
+
+        #product-list-panel .product-list-photo-arrow:hover {
+            color: #33485f;
+        }
+
+        #product-list-panel .product-list-main {
+            min-width: 0;
+        }
+
+        #product-list-panel .product-list-title {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            min-width: 0;
+            font-weight: 800;
+            color: #13213a;
+        }
+
+        #product-list-panel .product-list-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #product-list-panel .product-list-code {
+            flex: 0 0 auto;
+            color: #8a98aa;
+            font-size: .82rem;
+            font-weight: 700;
+        }
+
+        #product-list-panel .product-list-barcode,
+        #product-list-panel .product-list-stock,
+        #product-list-panel .product-list-price {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: #8793ae;
+            min-width: 0;
+        }
+
+        #product-list-panel .product-list-barcode {
+            margin-top: 11px;
+            font-size: .94rem;
+        }
+
+        #product-list-panel .product-list-barcode i {
+            color: #8794d2;
+            font-size: 1.12rem;
+        }
+
+        #product-list-panel .product-list-badge {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            border-radius: 4px;
+            padding: 3px 9px;
+            background: #0eb36b;
+            color: #fff;
+            font-size: .78rem;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        #product-list-panel .product-list-badge.is-understock,
+        #product-list-panel .product-list-badge.out {
+            background: #a32222;
+        }
+
+        #product-list-panel .product-list-stock {
+            margin-top: 9px;
+            font-size: .95rem;
+        }
+
+        #product-list-panel .product-list-stock i {
+            color: #8794d2;
+            font-size: 1.25rem;
+        }
+
+        #product-list-panel .product-list-price {
+            justify-content: flex-end;
+            color: #13213a;
+            font-weight: 800;
+        }
+
+        #product-list-panel .product-list-price i {
+            color: #14234c;
+            font-size: 1.12rem;
+        }
+
+        #product-list-panel .product-list-action {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        #product-list-panel .product-list-more {
+            width: 56px;
+            height: 56px;
+            border: 0;
+            border-radius: 0;
+            background: #dce9f8;
+            color: #14234c;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.25rem;
+        }
+
+        #product-list-panel #product-list-add-shortcut {
+            width: 56px;
+            height: 56px;
+            padding: 0;
+            border-radius: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #product-list-panel .product-list-more:hover {
+            background: #cbdcf0;
+        }
+
+        #product-list-panel .product-list-empty {
+            padding: 18px 22px;
+        }
+
+        @media (max-width: 980px) {
+            #product-list-panel .product-list-row {
+                grid-template-columns: minmax(240px, 1fr) minmax(130px, auto) minmax(100px, auto) 56px;
+            }
+
+            #product-list-panel .product-list-stock-block,
+            #product-list-panel .product-list-price {
+                justify-self: start;
+            }
+        }
+
+        @media (max-width: 760px) {
+            #product-list-panel .product-list-row {
+                grid-template-columns: 1fr 56px;
+                align-items: start;
+                gap: 10px 12px;
+                padding: 12px;
+            }
+
+            #product-list-panel .product-list-identity,
+            #product-list-panel .product-list-stock-block,
+            #product-list-panel .product-list-price {
+                grid-column: 1 / 2;
+            }
+
+            #product-list-panel .product-list-action {
+                grid-column: 2 / 3;
+                grid-row: 1 / 2;
+            }
+
+            #product-list-panel .product-list-title {
+                flex-wrap: wrap;
+            }
+
+            #product-list-panel .product-list-name {
+                white-space: normal;
+            }
+        }
+    </style>
     <section class="card">
         <div class="actions" style="justify-content: space-between; align-items: flex-start;">
             <div>
@@ -71,22 +310,12 @@
         <section class="card" id="product-list-panel">
             <div class="actions" style="justify-content: space-between;">
                 <h2 style="margin-top: 0;">Product List</h2>
-                <span class="chip">{{ $products->total() }} total</span>
+                @if($canManageProducts)
+                    <button type="button" class="btn btn-primary" id="product-list-add-shortcut">+Add</button>
+                @endif
             </div>
-            <div class="table-wrap" style="margin-top: 12px;">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Photo</th>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>Pricing</th>
-                        <th>Stock</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                    </thead>
-                    <tbody>
+            <div class="product-list-wrap">
+                <div class="product-list-body">
                     @forelse($products as $product)
                         @php
                             $profitDisplay = (float) $product->profit_percent;
@@ -112,55 +341,77 @@
                                 'stock_status' => (string) ($product->stock_status ?? ''),
                                 'photo_url' => (string) $photoUrl,
                             ];
+                            $isInStock = (int) $product->qty_on_hand > 0;
+                            $stockBadgeText = trim((string) ($product->stock_status ?? '')) !== ''
+                                ? (string) $product->stock_status
+                                : 'N/A';
+                            $isUnderstock = strcasecmp($stockBadgeText, 'Understock') === 0;
                         @endphp
-                        <tr data-type-id="{{ $product->product_type_id }}">
-                            <td>
+                        <article class="product-list-row" data-type-id="{{ $product->product_type_id }}">
+                            <div class="product-list-identity">
                                 @if($photoUrl !== '')
-                                    <div class="row-photo-carousel" data-product-no="{{ $product->product_no }}" style="display: flex; align-items: center; gap: 2px;">
-                                        <button type="button" class="row-photo-prev" style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 1px; line-height: 0; flex-shrink: 0;">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                                    <div class="row-photo-carousel" data-product-no="{{ $product->product_no }}">
+                                        <button type="button" class="row-photo-prev product-list-photo-arrow" aria-label="Previous product photo">
+                                            <i class="bi bi-chevron-left"></i>
                                         </button>
-                                        <img src="{{ $photoUrl }}" class="row-photo-img" alt="Product photo" style="width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex-shrink: 0;">
-                                        <button type="button" class="row-photo-next" style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 1px; line-height: 0; flex-shrink: 0;">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                                        <img src="{{ $photoUrl }}" class="row-photo-img product-list-photo" alt="{{ $product->product_name }} photo" loading="lazy">
+                                        <button type="button" class="row-photo-next product-list-photo-arrow" aria-label="Next product photo">
+                                            <i class="bi bi-chevron-right"></i>
                                         </button>
                                     </div>
                                 @else
-                                    <span class="subtle">No photo</span>
+                                    <span class="product-list-photo-empty" aria-label="No product photo">
+                                        <i class="bi bi-image"></i>
+                                    </span>
                                 @endif
-                            </td>
-                            <td>{{ $product->product_name }}</td>
-                            <td class="product-type-cell">{{ $product->product_type_name ?? 'N/A' }}</td>
-                            <td>
-                                <div>Sell Price: ${{ number_format((float) $product->sell_price, 2) }}</div>
-                                <div class="subtle">Cost Price: ${{ number_format((float) $product->cost_price, 2) }}</div>
-                                <div class="subtle">Profit: {{ number_format($profitDisplay, 2) }}%</div>
-                            </td>
-                            <td>
-                                {{ $product->qty_on_hand }} {{ $product->measure_name ?? 'Pieces' }}
-                            </td>
-                            <td>{{ $product->stock_status ?? 'N/A' }}</td>
-                            <td>
+
+                                <div class="product-list-main">
+                                    <div class="product-list-title">
+                                        <span class="product-list-name" title="{{ $product->product_name }}">{{ $product->product_name }}</span>
+                                        <span class="product-list-code">#{{ $product->product_no }}</span>
+                                    </div>
+                                    <div class="product-list-barcode">
+                                        <i class="bi bi-upc-scan" aria-hidden="true"></i>
+                                        <span>{{ $product->product_no }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="product-list-stock-block">
+                                <span class="product-list-badge {{ $isUnderstock ? 'is-understock' : ($isInStock ? '' : 'out') }}">
+                                    {{ $stockBadgeText }}
+                                </span>
+                                <div class="product-list-stock">
+                                    <i class="bi bi-box-seam-fill" aria-hidden="true"></i>
+                                    <span>{{ number_format((int) $product->qty_on_hand) }} {{ $product->measure_name ?? 'Pieces' }} Available</span>
+                                </div>
+                            </div>
+
+                            <div class="product-list-price">
+                                <i class="bi bi-cart-fill" aria-hidden="true"></i>
+                                <span>${{ number_format((float) $product->sell_price, 2) }}</span>
+                            </div>
+
+                            <div class="product-list-action">
                                 @if($canManageProducts)
                                     <button
                                         type="button"
-                                        class="btn btn-muted js-product-detail"
+                                        class="product-list-more js-product-detail"
                                         data-product='@json($detailPayload)'
+                                        aria-label="Open product detail for {{ $product->product_name }}"
+                                        title="Product detail"
                                     >
-                                        Detail
+                                        <i class="bi bi-three-dots" aria-hidden="true"></i>
                                     </button>
                                 @else
                                     <span class="subtle">Read only</span>
                                 @endif
-                            </td>
-                        </tr>
+                            </div>
+                        </article>
                     @empty
-                        <tr>
-                            <td colspan="7" class="subtle">No products found.</td>
-                        </tr>
+                        <div class="product-list-empty subtle">No products found.</div>
                     @endforelse
-                    </tbody>
-                </table>
+                </div>
             </div>
             <div class="pager" style="margin-top: 12px;">
                 {{ $products->links('pagination.orbit') }}
@@ -590,6 +841,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             const listBtn = document.getElementById('show-product-list');
             const addBtn = document.getElementById('show-product-add');
+            const listAddShortcut = document.getElementById('product-list-add-shortcut');
             const typesBtn = document.getElementById('show-product-types');
             const alertBtn = document.getElementById('show-alert-stocks');
             const listPanel = document.getElementById('product-list-panel');
@@ -747,6 +999,7 @@
 
             listBtn.addEventListener('click', () => activate('list'));
             if (addBtn) addBtn.addEventListener('click', () => activate('add'));
+            if (listAddShortcut) listAddShortcut.addEventListener('click', () => activate('add'));
             typesBtn.addEventListener('click', () => activate('types'));
             if (alertBtn) alertBtn.addEventListener('click', () => activate('alerts'));
 
@@ -772,7 +1025,7 @@
 
                     const productNo = data.product_no || '';
                     currentProductNo = productNo;
-                    currentRowThumbnail = button.closest('tr')?.querySelector('img') || null;
+                    currentRowThumbnail = button.closest('.product-list-row, tr')?.querySelector('img.row-photo-img, img') || null;
                     currentAlertRow = mode === 'alert' ? (button.closest('tr') || null) : null;
                     currentAlertButton = mode === 'alert' ? button : null;
                     if (detailForm) {
@@ -1054,39 +1307,62 @@
             }
 
             // --- AJAX product search ---
-            const productTableBody   = document.querySelector('#product-list-panel tbody');
-            const productTotalChip   = document.querySelector('#product-list-panel .chip');
+            const productListBody    = document.querySelector('#product-list-panel .product-list-body');
             const productPager       = document.querySelector('#product-list-panel .pager');
             const searchUrl          = '{{ route('products.index') }}';
             const detailTemplate     = detailForm ? detailForm.dataset.updateTemplate || '' : '';
 
             function buildRow(p) {
                 const photoCell = p.photo_url
-                    ? `<div class="row-photo-carousel" data-product-no="${escHtml(String(p.product_no||''))}" style="display:flex;align-items:center;gap:2px;">
-                        <button type="button" class="row-photo-prev" style="background:none;border:none;cursor:pointer;color:#6b7280;padding:1px;line-height:0;flex-shrink:0;"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg></button>
-                        <img src="${escHtml(p.photo_url)}" class="row-photo-img" alt="Product photo" style="width:46px;height:46px;border-radius:10px;object-fit:cover;flex-shrink:0;">
-                        <button type="button" class="row-photo-next" style="background:none;border:none;cursor:pointer;color:#6b7280;padding:1px;line-height:0;flex-shrink:0;"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg></button>
+                    ? `<div class="row-photo-carousel" data-product-no="${escHtml(String(p.product_no || ''))}">
+                        <button type="button" class="row-photo-prev product-list-photo-arrow" aria-label="Previous product photo"><i class="bi bi-chevron-left"></i></button>
+                        <img src="${escHtml(p.photo_url)}" class="row-photo-img product-list-photo" alt="${escHtml(p.product_name || 'Product')} photo" loading="lazy">
+                        <button type="button" class="row-photo-next product-list-photo-arrow" aria-label="Next product photo"><i class="bi bi-chevron-right"></i></button>
                        </div>`
-                    : `<span class="subtle">No photo</span>`;
+                    : `<span class="product-list-photo-empty" aria-label="No product photo"><i class="bi bi-image"></i></span>`;
+                const qty = parseInt(p.qty_on_hand, 10) || 0;
+                const inStock = qty > 0;
+                const productNo = String(p.product_no || '');
+                const productName = String(p.product_name || '');
+                const measureName = String(p.measure_name || 'Pieces');
+                const sellPrice = parseFloat(p.sell_price) || 0;
+                const stockBadgeText = String(p.stock_status || '').trim() || 'N/A';
+                const isUnderstock = stockBadgeText.toLowerCase() === 'understock';
+                const payload = JSON.stringify(p)
+                    .replace(/&/g, '&amp;')
+                    .replace(/'/g, '&#39;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
                 const actionCell = p.can_manage
-                    ? `<button type="button" class="btn btn-muted js-product-detail" data-product='${JSON.stringify(p).replace(/'/g,"&#39;")}'>Detail</button>`
+                    ? `<button type="button" class="product-list-more js-product-detail" data-product='${payload}' aria-label="Open product detail for ${escHtml(productName)}" title="Product detail"><i class="bi bi-three-dots" aria-hidden="true"></i></button>`
                     : `<span class="subtle">Read only</span>`;
-                const sellPrice    = parseFloat(p.sell_price) || 0;
-                const costPrice    = parseFloat(p.cost_price) || 0;
-                const profitPct    = parseFloat(p.profit_percent) || 0;
-                return `<tr data-type-id="${escHtml(String(p.product_type_id || ''))}">
-                    <td>${photoCell}</td>
-                    <td>${escHtml(p.product_name)}</td>
-                    <td class="product-type-cell">${escHtml(p.product_type_name || 'N/A')}</td>
-                    <td>
-                        <div>Sell Price: $${sellPrice.toFixed(2)}</div>
-                        <div class="subtle">Cost Price: $${costPrice.toFixed(2)}</div>
-                        <div class="subtle">Profit: ${profitPct.toFixed(2)}%</div>
-                    </td>
-                    <td>${parseInt(p.qty_on_hand) || 0} ${escHtml(p.measure_name || 'Pieces')}</td>
-                    <td>${escHtml(p.stock_status || 'N/A')}</td>
-                    <td>${actionCell}</td>
-                </tr>`;
+                return `<article class="product-list-row" data-type-id="${escHtml(String(p.product_type_id || ''))}">
+                    <div class="product-list-identity">
+                        ${photoCell}
+                        <div class="product-list-main">
+                            <div class="product-list-title">
+                                <span class="product-list-name" title="${escHtml(productName)}">${escHtml(productName)}</span>
+                                <span class="product-list-code">#${escHtml(productNo)}</span>
+                            </div>
+                            <div class="product-list-barcode">
+                                <i class="bi bi-upc-scan" aria-hidden="true"></i>
+                                <span>${escHtml(productNo)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="product-list-stock-block">
+                        <span class="product-list-badge ${isUnderstock ? 'is-understock' : (inStock ? '' : 'out')}">${escHtml(stockBadgeText)}</span>
+                        <div class="product-list-stock">
+                            <i class="bi bi-box-seam-fill" aria-hidden="true"></i>
+                            <span>${qty.toLocaleString()} ${escHtml(measureName)} Available</span>
+                        </div>
+                    </div>
+                    <div class="product-list-price">
+                        <i class="bi bi-cart-fill" aria-hidden="true"></i>
+                        <span>$${sellPrice.toFixed(2)}</span>
+                    </div>
+                    <div class="product-list-action">${actionCell}</div>
+                </article>`;
             }
 
             function escHtml(str) {
@@ -1101,7 +1377,7 @@
                         try { data = JSON.parse(button.getAttribute('data-product')); } catch (_) { return; }
                         if (modalTitle) modalTitle.textContent = 'Product Detail';
                         currentProductNo = data.product_no || '';
-                        currentRowThumbnail = button.closest('tr')?.querySelector('img') || null;
+                        currentRowThumbnail = button.closest('.product-list-row, tr')?.querySelector('img.row-photo-img, img') || null;
                         currentAlertRow = null;
                         currentAlertButton = null;
                         if (detailForm) detailForm.action = detailTemplate.replace('__PRODUCT__', encodeURIComponent(currentProductNo));
@@ -1142,15 +1418,14 @@
                 fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(r => r.ok ? r.json() : Promise.reject(r.status))
                     .then(({ products, total, pagination }) => {
-                        if (!productTableBody) return;
+                        if (!productListBody) return;
                         if (!products || products.length === 0) {
-                            productTableBody.innerHTML = '<tr><td colspan="7" class="subtle">No products found.</td></tr>';
+                            productListBody.innerHTML = '<div class="product-list-empty subtle">No products found.</div>';
                         } else {
-                            productTableBody.innerHTML = products.map(buildRow).join('');
+                            productListBody.innerHTML = products.map(buildRow).join('');
                             attachDetailListeners();
                             setupRowCarousels();
                         }
-                        if (productTotalChip) productTotalChip.textContent = `${total} total`;
                         if (productPager) productPager.innerHTML = pagination;
                     })
                     .catch((err) => { console.error('Product search failed', err); });
