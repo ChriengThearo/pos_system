@@ -947,6 +947,9 @@
     $canManageProducts = \App\Support\StaffAuth::can('products.manage');
     $canStockStatus = \App\Support\StaffAuth::can('stock-status.read');
     $canFutureStock = \App\Support\StaffAuth::can('future-stock.read');
+    $canUsers = \App\Support\StaffAuth::can('users.read');
+    $canRoles = \App\Support\StaffAuth::can('roles.read');
+    $canPermissions = \App\Support\StaffAuth::can('permissions.read');
     $canSystemAudit = \App\Support\StaffAuth::can('system.audit');
     $dashboardUrl = $canDashboardManage ? route('admin.dashboard') : route('store.home');
     $dashboardActive = $canDashboardManage ? request()->routeIs('admin.*') : request()->routeIs('store.home');
@@ -1145,6 +1148,24 @@
             'icon' => 'bi-tools',
             'label' => 'Setting',
             'items' => [
+                [
+                    'show' => $canUsers,
+                    'url' => $canUsers ? route('admin.rbac.users.index') : null,
+                    'label' => 'Users',
+                    'active' => request()->routeIs('admin.rbac.users.*'),
+                ],
+                [
+                    'show' => $canRoles,
+                    'url' => $canRoles ? route('admin.rbac.roles.index') : null,
+                    'label' => 'Roles',
+                    'active' => request()->routeIs('admin.rbac.roles.*'),
+                ],
+                [
+                    'show' => $canPermissions,
+                    'url' => $canPermissions ? route('admin.rbac.permissions.index') : null,
+                    'label' => 'Permissions',
+                    'active' => request()->routeIs('admin.rbac.permissions.*'),
+                ],
                 [
                     'show' => $canCurrencies,
                     'url' => $canCurrencies ? route('currencies.index') : null,
