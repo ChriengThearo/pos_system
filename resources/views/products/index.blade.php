@@ -149,8 +149,13 @@
         }
 
         #product-list-panel .product-list-stock {
-            margin-top: 9px;
             font-size: .95rem;
+        }
+
+        #product-list-panel .product-list-stock-block {
+            display: grid;
+            justify-items: start;
+            gap: 9px;
         }
 
         #product-list-panel .product-list-stock i {
@@ -191,6 +196,7 @@
         #product-list-panel #product-list-add-shortcut {
             width: 56px;
             height: 56px;
+            margin-right: 18px;
             padding: 0;
             border-radius: 0;
             display: inline-flex;
@@ -242,6 +248,10 @@
 
             #product-list-panel .product-list-name {
                 white-space: normal;
+            }
+
+            #product-list-panel #product-list-add-shortcut {
+                margin-right: 12px;
             }
         }
     </style>
