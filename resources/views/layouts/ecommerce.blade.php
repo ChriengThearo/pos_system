@@ -937,6 +937,7 @@
     $canOrders = \App\Support\StaffAuth::can('orders.read');
     $canTotalSales = \App\Support\StaffAuth::can('total-sales.read');
     $canInvoices = \App\Support\StaffAuth::can('invoices.read');
+    $canReturns = \App\Support\StaffAuth::can('returns.read');
     $canPurchases = \App\Support\StaffAuth::can('purchases.read');
     $canEmployees = \App\Support\StaffAuth::can('employees.read');
     $canJobs = \App\Support\StaffAuth::can('jobs.read');
@@ -1046,6 +1047,12 @@
                     'label' => 'Client Debts',
                     'active' => request()->routeIs('client-depts.*'),
                     'badge' => $clientDeptCount > 0 ? $clientDeptCount : null,
+                ],
+                [
+                    'show' => $canReturns,
+                    'url' => $canReturns ? route('returns.index') : null,
+                    'label' => 'Return/Refunds',
+                    'active' => request()->routeIs('returns.*'),
                 ],
                 [
                     'show' => $canClients,

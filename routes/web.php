@@ -8,6 +8,7 @@ use App\Http\Controllers\EcommerceController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeSearchController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReturnRefundController;
 use App\Http\Controllers\StaffAuthController;
 use App\Support\StaffAuth;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,7 @@ Route::middleware('staff.auth')->group(function (): void {
             'purchases.read' => 'purchases.index',
             'clients.read' => 'clients.index',
             'client-depts.read' => 'client-depts.index',
+            'returns.read' => 'returns.index',
             'currencies.read' => 'currencies.index',
             'products.read' => 'products.index',
             'stock-status.read' => 'products.status',
@@ -168,6 +170,15 @@ Route::middleware('staff.auth')->group(function (): void {
     Route::post('/orders/{invoiceNo}/repay', [EcommerceController::class, 'repayOrder'])
         ->middleware('staff.ability:client-depts.manage')
         ->name('store.orders.repay');
+    Route::get('/returns', [ReturnRefundController::class, 'index'])
+        ->middleware('staff.ability:returns.read')
+        ->name('returns.index');
+    Route::get('/returns/invoice/{invoiceNo}', [ReturnRefundController::class, 'invoice'])
+        ->middleware('staff.ability:returns.read')
+        ->name('returns.invoice');
+    Route::post('/returns', [ReturnRefundController::class, 'store'])
+        ->middleware('staff.ability:returns.manage')
+        ->name('returns.store');
     Route::get('/total-sales', [EcommerceController::class, 'totalSales'])
         ->middleware('staff.ability:total-sales.read')
         ->name('total-sales.index');

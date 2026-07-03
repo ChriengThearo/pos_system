@@ -23,6 +23,8 @@ class StaffAuth
         ['code' => 'total-sales.manage', 'name' => 'Manage Sales', 'module' => 'Total Sales', 'description' => 'Manage totals'],
         ['code' => 'invoices.read', 'name' => 'View Invoices', 'module' => 'Invoices', 'description' => 'Read invoices'],
         ['code' => 'invoices.manage', 'name' => 'Manage Invoices', 'module' => 'Invoices', 'description' => 'Create invoices'],
+        ['code' => 'returns.read', 'name' => 'View Returns', 'module' => 'Returns', 'description' => 'Read returns'],
+        ['code' => 'returns.manage', 'name' => 'Manage Returns', 'module' => 'Returns', 'description' => 'Create returns'],
         ['code' => 'purchases.read', 'name' => 'View Purchases', 'module' => 'Purchases', 'description' => 'Read purchases'],
         ['code' => 'purchases.manage', 'name' => 'Manage Purchases', 'module' => 'Purchases', 'description' => 'Edit purchases'],
         ['code' => 'clients.read', 'name' => 'View Clients', 'module' => 'Clients', 'description' => 'Read clients'],
@@ -56,7 +58,7 @@ class StaffAuth
         'STORE MANAGER' => [
             'dashboard.read', 'dashboard.manage', 'shop.read', 'checkout.process',
             'orders.read', 'orders.manage', 'total-sales.read', 'total-sales.manage',
-            'invoices.read', 'invoices.manage', 'purchases.read', 'purchases.manage',
+            'invoices.read', 'invoices.manage', 'returns.read', 'returns.manage', 'purchases.read', 'purchases.manage',
             'clients.read', 'clients.manage', 'client-depts.read', 'client-depts.manage', 'client-types.manage',
             'currencies.read', 'currencies.manage',
             'products.read', 'products.manage', 'product-types.manage',
@@ -68,7 +70,7 @@ class StaffAuth
         'ASSISTANT MANAGER' => [
             'dashboard.read', 'dashboard.manage', 'shop.read', 'checkout.process',
             'orders.read', 'orders.manage', 'total-sales.read', 'total-sales.manage',
-            'invoices.read', 'invoices.manage', 'purchases.read', 'purchases.manage',
+            'invoices.read', 'invoices.manage', 'returns.read', 'returns.manage', 'purchases.read', 'purchases.manage',
             'clients.read', 'clients.manage', 'client-depts.read', 'client-depts.manage', 'client-types.manage',
             'currencies.read', 'currencies.manage',
             'products.read', 'products.manage', 'product-types.manage',
@@ -79,7 +81,7 @@ class StaffAuth
         ],
         'CASHIER' => [
             'dashboard.read', 'shop.read', 'checkout.process', 'orders.read',
-            'total-sales.read', 'invoices.read', 'invoices.manage', 'clients.read', 'client-depts.read',
+            'total-sales.read', 'invoices.read', 'invoices.manage', 'returns.read', 'returns.manage', 'clients.read', 'client-depts.read',
             'currencies.read',
         ],
         'INVENTORY CLERK' => [
@@ -110,6 +112,8 @@ class StaffAuth
 
     private const REQUIRED_PERMISSIONS = [
         ['code' => 'orders.manage', 'name' => 'Manage Orders', 'description' => 'Create and update'],
+        ['code' => 'returns.read', 'name' => 'View Returns', 'description' => 'Read returns'],
+        ['code' => 'returns.manage', 'name' => 'Manage Returns', 'description' => 'Create returns'],
         ['code' => 'client-depts.read', 'name' => 'Read Client Debt', 'description' => 'View client debts'],
         ['code' => 'client-depts.manage', 'name' => 'Manage Client Debt', 'description' => 'Manage client debts'],
     ];
@@ -412,6 +416,7 @@ class StaffAuth
         if (self::$rbacReady) {
             try {
                 self::ensureRequiredPermissions($conn);
+                self::syncReturnPermissions($conn);
             } catch (\Throwable) {
                 // ignore
             }
@@ -425,6 +430,7 @@ class StaffAuth
             static fn () => self::seedGroups($conn),
             static fn () => self::seedPermissions($conn),
             static fn () => self::ensureRequiredPermissions($conn),
+            static fn () => self::syncReturnPermissions($conn),
             static fn () => self::syncClientDebtPermissions($conn),
             static fn () => self::pruneDeprecatedPermissions($conn),
             static fn () => self::seedRolePermissions($conn),
@@ -702,6 +708,31 @@ SQL);
                     self::insertPermissionGroup($conn, $groupId, (int) $clientDebtManageId);
                 }
             }
+        }
+    }
+
+    private static function syncReturnPermissions(ConnectionInterface $conn): void
+    {
+        if (! self::tableExists($conn, 'PERMISSION_GROUP')) {
+            return;
+        }
+
+        $formMap = self::permissionCodeToFormIdMap($conn);
+        $returnsReadId = $formMap['returns.read'] ?? null;
+        $returnsManageId = $formMap['returns.manage'] ?? null;
+        if (! $returnsReadId || ! $returnsManageId) {
+            return;
+        }
+
+        $groupMap = self::groupNameToIdMap($conn);
+        foreach (['STORE MANAGER', 'ASSISTANT MANAGER', 'CASHIER'] as $role) {
+            $groupId = $groupMap[self::normalizeRole($role)] ?? null;
+            if ($groupId === null) {
+                continue;
+            }
+
+            self::insertPermissionGroup($conn, (int) $groupId, (int) $returnsReadId);
+            self::insertPermissionGroup($conn, (int) $groupId, (int) $returnsManageId);
         }
     }
 
