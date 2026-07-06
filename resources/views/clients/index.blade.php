@@ -3,6 +3,169 @@
 @section('title', 'Clients')
 
 @section('content')
+
+    {{-- ══════════════════════════════════════════════════════════════════
+         DSS ANALYTICS DASHBOARD
+    ══════════════════════════════════════════════════════════════════ --}}
+    <section class="card" id="dss-dashboard">
+        <div class="actions" style="justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+            <div>
+                <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem;">
+                    <i class="bi bi-graph-up-arrow" style="color: var(--primary); margin-right: 6px;"></i>
+                    Client Analytics Dashboard
+                    <span class="chip" style="margin-left: 8px; font-size: .68rem; background: rgba(0,85,165,.08); color: var(--primary); border-color: rgba(0,85,165,.2);">DSS</span>
+                </h2>
+                <p class="subtle" style="margin: 4px 0 0; font-size: .84rem;">Decision support insights — top clients, spending trends, and retention metrics.</p>
+            </div>
+            <div class="actions">
+                <button id="dss-refresh-btn" class="btn btn-muted" style="font-size:.8rem; padding:6px 10px;" title="Refresh analytics">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+                <button id="dss-toggle-btn" class="btn btn-muted" style="font-size:.8rem; padding:6px 10px;" title="Collapse dashboard">
+                    <i class="bi bi-chevron-up" id="dss-chevron"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="dss-body">
+            {{-- KPI Cards --}}
+            <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px;" id="dss-kpi-grid">
+                {{-- Loading skeletons --}}
+                @for($i = 0; $i < 6; $i++)
+                    <article class="stat dss-skeleton" style="min-height: 74px;">
+                        <div class="dss-skel-line" style="width:55%; height:10px; margin-bottom:10px;"></div>
+                        <div class="dss-skel-line" style="width:75%; height:22px;"></div>
+                    </article>
+                @endfor
+            </div>
+
+            {{-- Charts Row --}}
+            <div class="grid grid-2" style="margin-top: 14px; gap: 14px;" id="dss-charts-row">
+
+                {{-- Top Clients Bar Chart --}}
+                <div class="card" style="padding: 16px; box-shadow: none; border: 1px solid var(--border);">
+                    <div class="actions" style="justify-content: space-between; margin-bottom: 10px;">
+                        <h3 style="margin: 0; font-size: .95rem;">
+                            <i class="bi bi-bar-chart-horizontal-fill" style="color: var(--accent); margin-right:5px;"></i>
+                            Top 10 Clients by Spending
+                        </h3>
+                        <span class="chip" style="font-size:.72rem;">Descending</span>
+                    </div>
+                    <div id="dss-top-clients-loading" style="text-align:center; padding:40px 0; color:var(--muted); font-size:.9rem;">
+                        <i class="bi bi-hourglass-split"></i> Loading chart…
+                    </div>
+                    <div id="dss-top-clients-empty" style="display:none; text-align:center; padding:40px 0; color:var(--muted); font-size:.9rem;">
+                        <i class="bi bi-people"></i> No spending data found.
+                    </div>
+                    <canvas id="dss-top-clients-chart" style="display:none; max-height:320px;"></canvas>
+                </div>
+
+                {{-- Spending History Line Chart --}}
+                <div class="card" style="padding: 16px; box-shadow: none; border: 1px solid var(--border);">
+                    <div class="actions" style="justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <h3 style="margin: 0; font-size: .95rem;">
+                            <i class="bi bi-graph-up" style="color: var(--success); margin-right:5px;"></i>
+                            Spending History
+                        </h3>
+                        <div class="actions" style="gap:6px; flex-wrap:wrap;">
+                            <select id="dss-history-client" style="width:auto; font-size:.78rem; padding:4px 8px; border-radius:8px; min-width:110px;">
+                                <option value="">All Clients</option>
+                            </select>
+                            <div id="dss-range-tabs" style="display:inline-flex; gap:4px; flex-wrap:wrap;">
+                                <button class="dss-range-btn active" data-range="30" style="font-size:.75rem; padding:4px 9px; border-radius:8px; border:1px solid var(--border); background:#edf3fa; cursor:pointer; font-weight:700;">30d</button>
+                                <button class="dss-range-btn" data-range="7"   style="font-size:.75rem; padding:4px 9px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; font-weight:700;">7d</button>
+                                <button class="dss-range-btn" data-range="90"  style="font-size:.75rem; padding:4px 9px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; font-weight:700;">90d</button>
+                                <button class="dss-range-btn" data-range="365" style="font-size:.75rem; padding:4px 9px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; font-weight:700;">12m</button>
+                                <button class="dss-range-btn" data-range="custom" style="font-size:.75rem; padding:4px 9px; border-radius:8px; border:1px solid var(--border); background:#fff; cursor:pointer; font-weight:700;">Custom</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="dss-custom-range" style="display:none; gap:8px; margin-bottom:8px;" class="actions">
+                        <div>
+                            <label style="font-size:.75rem; margin-bottom:3px;">From</label>
+                            <input type="date" id="dss-from-date" style="font-size:.8rem; padding:5px 8px; border-radius:8px; width:auto;">
+                        </div>
+                        <div>
+                            <label style="font-size:.75rem; margin-bottom:3px;">To</label>
+                            <input type="date" id="dss-to-date" style="font-size:.8rem; padding:5px 8px; border-radius:8px; width:auto;">
+                        </div>
+                        <div style="display:flex; align-items:flex-end;">
+                            <button id="dss-apply-range" class="btn btn-primary" style="font-size:.78rem; padding:5px 10px;">Apply</button>
+                        </div>
+                    </div>
+                    <div id="dss-history-loading" style="text-align:center; padding:40px 0; color:var(--muted); font-size:.9rem;">
+                        <i class="bi bi-hourglass-split"></i> Loading chart…
+                    </div>
+                    <div id="dss-history-empty" style="display:none; text-align:center; padding:40px 0; color:var(--muted); font-size:.9rem;">
+                        <i class="bi bi-calendar-x"></i> No data for this period.
+                    </div>
+                    <canvas id="dss-history-chart" style="display:none; max-height:280px;"></canvas>
+                </div>
+            </div>
+
+            {{-- DSS Insights Panel --}}
+            <div class="card" id="dss-insights-panel" style="padding: 16px; box-shadow: none; border: 1px solid var(--border); margin-top: 14px; display:none;">
+                <h3 style="margin: 0 0 12px; font-size: .95rem;">
+                    <i class="bi bi-lightbulb-fill" style="color: #f0a500; margin-right:5px;"></i>
+                    DSS Insights & Recommendations
+                </h3>
+                <div class="grid grid-2" style="gap: 10px;" id="dss-insights-body">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {{-- DSS Styles --}}
+    <style>
+        .dss-skeleton { position: relative; overflow: hidden; }
+        .dss-skeleton::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent);
+            animation: dss-shimmer 1.4s infinite;
+        }
+        .dss-skel-line {
+            border-radius: 6px;
+            background: #e2e8f0;
+            display: block;
+        }
+        @keyframes dss-shimmer {
+            0%   { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .dss-kpi-card { transition: transform .15s ease, box-shadow .15s ease; }
+        .dss-kpi-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(15,23,42,.13); }
+        .dss-insight-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px;
+            border-radius: 12px;
+            background: var(--surface-soft);
+            border: 1px solid var(--border);
+        }
+        .dss-insight-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+        .dss-range-btn.active {
+            background: var(--primary) !important;
+            color: #fff !important;
+            border-color: var(--primary) !important;
+        }
+        @media (max-width: 760px) {
+            #dss-charts-row { grid-template-columns: 1fr !important; }
+            #dss-kpi-grid   { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+    </style>
+
     <section class="card">
         <div class="actions" style="justify-content: space-between; align-items: flex-start;">
             <div>
@@ -634,5 +797,443 @@
                 });
             }
         });
+    </script>
+
+    {{-- ══════════════════════════════════════════════════════════════════
+         DSS JAVASCRIPT  (Chart.js loaded from CDN)
+    ══════════════════════════════════════════════════════════════════ --}}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script>
+    (function () {
+        'use strict';
+
+        const DSS_ENDPOINT = @json(route('clients.dss'));
+
+        // ── Helpers ──────────────────────────────────────────────────────
+        const fmt = (n) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+        const fmtShort = (n) => {
+            if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M';
+            if (n >= 1_000)     return '$' + (n / 1_000).toFixed(1) + 'K';
+            return '$' + fmt(n);
+        };
+
+        let topClientsChart = null;
+        let historyChart    = null;
+        let topClientsData  = [];
+
+        // ── Toggle collapse ───────────────────────────────────────────────
+        const dssBody    = document.getElementById('dss-body');
+        const chevron    = document.getElementById('dss-chevron');
+        const toggleBtn  = document.getElementById('dss-toggle-btn');
+        let collapsed = false;
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                collapsed = !collapsed;
+                dssBody.style.display = collapsed ? 'none' : '';
+                chevron.className = collapsed ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+            });
+        }
+
+        // ── Refresh button ────────────────────────────────────────────────
+        const refreshBtn = document.getElementById('dss-refresh-btn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                loadSummary();
+                loadTopClients();
+                loadHistory();
+            });
+        }
+
+        // ── Load Summary KPIs ─────────────────────────────────────────────
+        function loadSummary() {
+            const kpiGrid = document.getElementById('dss-kpi-grid');
+            if (!kpiGrid) return;
+
+            // Show skeletons
+            kpiGrid.innerHTML = Array.from({length: 6}).map(() => `
+                <article class="stat dss-skeleton" style="min-height:74px;">
+                    <div class="dss-skel-line" style="width:55%;height:10px;margin-bottom:10px;"></div>
+                    <div class="dss-skel-line" style="width:75%;height:22px;"></div>
+                </article>`).join('');
+
+            fetch(`${DSS_ENDPOINT}?type=summary`, { headers: { 'Accept': 'application/json' } })
+                .then(r => r.json())
+                .then(d => renderKPIs(d, kpiGrid))
+                .catch(() => {
+                    kpiGrid.innerHTML = `<div style="grid-column:1/-1; text-align:center; color:var(--muted); padding:20px;">
+                        <i class="bi bi-exclamation-triangle"></i> Failed to load analytics.
+                    </div>`;
+                });
+        }
+
+        function renderKPIs(d, kpiGrid) {
+            const cards = [
+                {
+                    label: 'Highest Spending Client',
+                    value: d.highest_spending_client ?? 'N/A',
+                    sub: '$' + fmt(d.highest_spending_amount ?? 0),
+                    icon: 'bi-trophy-fill', color: '#e36414',
+                },
+                {
+                    label: 'Avg Customer Spending',
+                    value: '$' + fmt(d.avg_spending ?? 0),
+                    sub: 'per active client',
+                    icon: 'bi-cash-coin', color: '#0055a5',
+                },
+                {
+                    label: 'Active Clients',
+                    value: (d.active_clients ?? 0).toLocaleString(),
+                    sub: 'with at least 1 invoice',
+                    icon: 'bi-people-fill', color: '#1d7a4f',
+                },
+                {
+                    label: 'New Clients This Month',
+                    value: (d.new_clients_month ?? 0).toLocaleString(),
+                    sub: 'first invoice this month',
+                    icon: 'bi-person-plus-fill', color: '#6f42c1',
+                },
+                {
+                    label: 'Repeat Customer Rate',
+                    value: (d.repeat_rate ?? 0).toFixed(1) + '%',
+                    sub: 'clients with >1 invoice',
+                    icon: 'bi-arrow-repeat', color: '#0d6efd',
+                },
+                {
+                    label: 'Customer Lifetime Value',
+                    value: '$' + fmt(d.clv ?? 0),
+                    sub: 'avg total spend per client',
+                    icon: 'bi-gem', color: '#d63384',
+                },
+            ];
+
+            kpiGrid.innerHTML = cards.map(c => `
+                <article class="stat dss-kpi-card" style="cursor:default;">
+                    <div class="label" style="display:flex; align-items:center; gap:6px;">
+                        <i class="bi ${c.icon}" style="color:${c.color};"></i> ${c.label}
+                    </div>
+                    <div class="value" style="font-size:1.15rem; margin-top:4px; word-break:break-word;">${c.value}</div>
+                    <div style="font-size:.75rem; color:var(--muted); margin-top:3px;">${c.sub}</div>
+                </article>`).join('');
+
+            // Render insights panel
+            renderInsights(d);
+        }
+
+        function renderInsights(d) {
+            const panel = document.getElementById('dss-insights-panel');
+            const body  = document.getElementById('dss-insights-body');
+            if (!panel || !body) return;
+
+            const insights = [];
+
+            const top5 = d.top5 ?? [];
+            if (top5.length > 0) {
+                const grandTotal = d.grand_total ?? 0;
+                const top5Total  = top5.reduce((s, c) => s + (c.revenue ?? 0), 0);
+                const pct        = grandTotal > 0 ? ((top5Total / grandTotal) * 100).toFixed(1) : '0.0';
+                insights.push({
+                    icon: 'bi-bar-chart-steps', color: '#e36414', bg: 'rgba(227,100,20,.1)',
+                    title: 'Revenue Concentration',
+                    text: `Top 5 clients contribute <strong>${pct}%</strong> of total revenue ($${fmt(top5Total)}). ` +
+                        top5.map(c => `<span style="font-weight:700;">${c.client_name}</span>`).join(', ') + '.',
+                });
+            }
+
+            const repeatRate = d.repeat_rate ?? 0;
+            if (repeatRate < 30) {
+                insights.push({
+                    icon: 'bi-exclamation-triangle-fill', color: '#a32222', bg: 'rgba(163,34,34,.1)',
+                    title: 'Low Retention Alert',
+                    text: `Only <strong>${repeatRate.toFixed(1)}%</strong> of clients are repeat buyers. Consider loyalty programs or follow-up campaigns to improve retention.`,
+                });
+            } else {
+                insights.push({
+                    icon: 'bi-check-circle-fill', color: '#1d7a4f', bg: 'rgba(29,122,79,.1)',
+                    title: 'Good Retention',
+                    text: `<strong>${repeatRate.toFixed(1)}%</strong> repeat customer rate — strong client loyalty. Focus on growing new client acquisition.`,
+                });
+            }
+
+            const avgSpending = d.avg_spending ?? 0;
+            const highestAmt  = d.highest_spending_amount ?? 0;
+            if (highestAmt > 0 && avgSpending > 0) {
+                const ratio = (highestAmt / avgSpending).toFixed(1);
+                insights.push({
+                    icon: 'bi-lightning-charge-fill', color: '#6f42c1', bg: 'rgba(111,66,193,.1)',
+                    title: 'Spending Disparity',
+                    text: `Top client spends <strong>${ratio}×</strong> the average. Consider tiered VIP pricing or exclusive offers for high-value clients.`,
+                });
+            }
+
+            const newClients = d.new_clients_month ?? 0;
+            insights.push({
+                icon: 'bi-person-plus-fill', color: '#0055a5', bg: 'rgba(0,85,165,.1)',
+                title: 'Acquisition This Month',
+                text: newClients > 0
+                    ? `<strong>${newClients}</strong> new client${newClients !== 1 ? 's' : ''} placed their first order this month.`
+                    : 'No new clients placed their first order this month. Review acquisition channels.',
+            });
+
+            body.innerHTML = insights.map(ins => `
+                <div class="dss-insight-item">
+                    <div class="dss-insight-icon" style="background:${ins.bg}; color:${ins.color};">
+                        <i class="bi ${ins.icon}"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:700; font-size:.88rem; margin-bottom:3px;">${ins.title}</div>
+                        <div style="font-size:.83rem; color:var(--muted); line-height:1.5;">${ins.text}</div>
+                    </div>
+                </div>`).join('');
+
+            panel.style.display = '';
+        }
+
+        // ── Load Top Clients Bar Chart ────────────────────────────────────
+        function loadTopClients() {
+            const loading = document.getElementById('dss-top-clients-loading');
+            const empty   = document.getElementById('dss-top-clients-empty');
+            const canvas  = document.getElementById('dss-top-clients-chart');
+            if (!canvas) return;
+            if (loading) loading.style.display = '';
+            if (empty)   empty.style.display   = 'none';
+            canvas.style.display = 'none';
+
+            fetch(`${DSS_ENDPOINT}?type=top_clients`, { headers: { 'Accept': 'application/json' } })
+                .then(r => r.json())
+                .then(d => {
+                    topClientsData = d.top_clients ?? [];
+                    if (loading) loading.style.display = 'none';
+                    if (topClientsData.length === 0) {
+                        if (empty) empty.style.display = '';
+                        return;
+                    }
+                    canvas.style.display = '';
+                    renderTopClientsChart(topClientsData);
+
+                    // Populate client filter dropdown for history chart
+                    const sel = document.getElementById('dss-history-client');
+                    if (sel) {
+                        topClientsData.forEach(c => {
+                            const opt = document.createElement('option');
+                            opt.value = c.client_no;
+                            opt.textContent = c.client_name;
+                            sel.appendChild(opt);
+                        });
+                    }
+                })
+                .catch(() => {
+                    if (loading) loading.style.display = 'none';
+                    if (empty)   empty.style.display   = '';
+                });
+        }
+
+        function renderTopClientsChart(data) {
+            const canvas = document.getElementById('dss-top-clients-chart');
+            if (!canvas) return;
+            if (topClientsChart) { topClientsChart.destroy(); topClientsChart = null; }
+
+            const labels   = data.map(c => c.client_name);
+            const values   = data.map(c => c.total_spending);
+            const maxVal   = Math.max(...values);
+            const barColors = values.map(v => {
+                const ratio = v / maxVal;
+                if (ratio > 0.8) return 'rgba(0,85,165,0.85)';
+                if (ratio > 0.5) return 'rgba(0,85,165,0.65)';
+                return 'rgba(0,85,165,0.40)';
+            });
+
+            topClientsChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Total Spending ($)',
+                        data: values,
+                        backgroundColor: barColors,
+                        borderColor: 'rgba(0,85,165,0.9)',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                    }],
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` $${fmt(ctx.parsed.x)}  |  ${data[ctx.dataIndex]?.order_count ?? 0} orders`,
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            ticks: { callback: v => fmtShort(v) },
+                            grid: { color: 'rgba(0,0,0,.05)' },
+                        },
+                        y: {
+                            ticks: { font: { size: 11 } },
+                            grid: { display: false },
+                        },
+                    },
+                },
+            });
+        }
+
+        // ── Load Spending History Line Chart ──────────────────────────────
+        let currentRange    = '30';
+        let currentClientNo = '';
+
+        function loadHistory(range, clientNo, from, to) {
+            range    = range    ?? currentRange;
+            clientNo = clientNo ?? currentClientNo;
+
+            currentRange    = range;
+            currentClientNo = clientNo;
+
+            const loading = document.getElementById('dss-history-loading');
+            const empty   = document.getElementById('dss-history-empty');
+            const canvas  = document.getElementById('dss-history-chart');
+            if (!canvas) return;
+            if (loading) loading.style.display = '';
+            if (empty)   empty.style.display   = 'none';
+            canvas.style.display = 'none';
+
+            let url = `${DSS_ENDPOINT}?type=history&range=${encodeURIComponent(range)}`;
+            if (clientNo) url += `&client_no=${encodeURIComponent(clientNo)}`;
+            if (from)     url += `&from=${encodeURIComponent(from)}`;
+            if (to)       url += `&to=${encodeURIComponent(to)}`;
+
+            fetch(url, { headers: { 'Accept': 'application/json' } })
+                .then(r => r.json())
+                .then(d => {
+                    const rows = d.history ?? [];
+                    if (loading) loading.style.display = 'none';
+                    if (rows.length === 0) {
+                        if (empty) empty.style.display = '';
+                        return;
+                    }
+                    canvas.style.display = '';
+                    renderHistoryChart(rows);
+                })
+                .catch(() => {
+                    if (loading) loading.style.display = 'none';
+                    if (empty)   empty.style.display   = '';
+                });
+        }
+
+        function renderHistoryChart(rows) {
+            const canvas = document.getElementById('dss-history-chart');
+            if (!canvas) return;
+            if (historyChart) { historyChart.destroy(); historyChart = null; }
+
+            const labels  = rows.map(r => r.date);
+            const amounts = rows.map(r => r.total_spending);
+            const orders  = rows.map(r => r.order_count);
+
+            historyChart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Total Spending ($)',
+                            data: amounts,
+                            borderColor: 'rgba(0,85,165,0.85)',
+                            backgroundColor: 'rgba(0,85,165,0.08)',
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: rows.length <= 14 ? 4 : 2,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'Orders',
+                            data: orders,
+                            borderColor: 'rgba(227,100,20,0.8)',
+                            backgroundColor: 'transparent',
+                            fill: false,
+                            tension: 0.35,
+                            pointRadius: rows.length <= 14 ? 3 : 2,
+                            borderDash: [4, 3],
+                            yAxisID: 'y2',
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.dataset.yAxisID === 'y'
+                                    ? ` Spending: $${fmt(ctx.parsed.y)}`
+                                    : ` Orders: ${ctx.parsed.y}`,
+                            },
+                        },
+                    },
+                    scales: {
+                        y: {
+                            position: 'left',
+                            ticks: { callback: v => fmtShort(v), font: { size: 11 } },
+                            grid: { color: 'rgba(0,0,0,.05)' },
+                        },
+                        y2: {
+                            position: 'right',
+                            ticks: { font: { size: 11 } },
+                            grid: { display: false },
+                        },
+                        x: {
+                            ticks: {
+                                maxTicksLimit: 10,
+                                font: { size: 10 },
+                                maxRotation: 30,
+                            },
+                            grid: { display: false },
+                        },
+                    },
+                },
+            });
+        }
+
+        // ── Range tab buttons ─────────────────────────────────────────────
+        document.querySelectorAll('.dss-range-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.dss-range-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const range = btn.dataset.range;
+                const customDiv = document.getElementById('dss-custom-range');
+                if (range === 'custom') {
+                    if (customDiv) customDiv.style.display = 'flex';
+                } else {
+                    if (customDiv) customDiv.style.display = 'none';
+                    loadHistory(range, currentClientNo);
+                }
+            });
+        });
+
+        const applyRangeBtn = document.getElementById('dss-apply-range');
+        if (applyRangeBtn) {
+            applyRangeBtn.addEventListener('click', () => {
+                const from = document.getElementById('dss-from-date')?.value ?? '';
+                const to   = document.getElementById('dss-to-date')?.value ?? '';
+                loadHistory('custom', currentClientNo, from, to);
+            });
+        }
+
+        // ── Client filter for history chart ───────────────────────────────
+        const historyClientSel = document.getElementById('dss-history-client');
+        if (historyClientSel) {
+            historyClientSel.addEventListener('change', () => {
+                loadHistory(currentRange, historyClientSel.value);
+            });
+        }
+
+        // ── Bootstrap all on page load ────────────────────────────────────
+        loadSummary();
+        loadTopClients();
+        loadHistory();
+    })();
     </script>
 @endsection

@@ -224,6 +224,9 @@ Route::middleware('staff.auth')->group(function (): void {
     Route::get('/clients/data', [ClientController::class, 'data'])
         ->middleware('staff.ability:clients.read')
         ->name('clients.data');
+    Route::get('/clients/dss', [ClientController::class, 'dss'])
+        ->middleware('staff.ability:clients.read')
+        ->name('clients.dss');
     Route::post('/clients', [ClientController::class, 'store'])
         ->middleware('staff.ability:clients.manage')
         ->name('clients.store');

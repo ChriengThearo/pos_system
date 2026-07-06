@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Support\StaffAuth;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -185,6 +187,187 @@ class ClientController extends Controller
                     ->orWhereRaw('ABS(NVL(t.DISCOUNT_RATE, 0) - ?) < 0.0001', [$numericValue]);
             }
         });
+    }
+
+    public function dss(Request $request): JsonResponse
+    {
+        $conn = DB::connection('oracle');
+        $type = trim((string) $request->query('type', 'summary'));
+
+        // ── Spending history with date range filter ─────────────────────────
+        if ($type === 'history') {
+            $range  = trim((string) $request->query('range', '30'));
+            $from   = trim((string) $request->query('from', ''));
+            $to     = trim((string) $request->query('to', ''));
+            $client = trim((string) $request->query('client_no', ''));
+
+            $query = $conn->table('INVOICES as i')
+                ->join('CLIENTS as c', 'c.CLIENT_NO', '=', 'i.CLIENT_NO')
+                ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
+                ->leftJoin('PRODUCTS as p', 'p.PRODUCT_NO', '=', 'd.PRODUCT_NO')
+                ->selectRaw("
+                    TRUNC(i.INVOICE_DATE) as period_date,
+                    COUNT(DISTINCT i.INVOICE_NO) as order_count,
+                    NVL(SUM(d.QTY * NVL(d.PRICE, p.SELL_PRICE)), 0) as total_spending
+                ");
+
+            if ($client !== '') {
+                $query->where('c.CLIENT_NO', '=', $client);
+            }
+
+            // Use positional ? placeholders — Oracle PDO handles these reliably
+            if ($from !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) {
+                $query->whereRaw("TRUNC(i.INVOICE_DATE) >= TO_DATE(?, 'YYYY-MM-DD')", [$from]);
+            } elseif (in_array($range, ['7', '30', '90'], true)) {
+                $query->whereRaw('TRUNC(i.INVOICE_DATE) >= TRUNC(SYSDATE) - ?', [(int) $range]);
+            } elseif ($range === '365') {
+                $query->whereRaw("TRUNC(i.INVOICE_DATE) >= ADD_MONTHS(TRUNC(SYSDATE), -12)");
+            }
+
+            if ($to !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+                $query->whereRaw("TRUNC(i.INVOICE_DATE) <= TO_DATE(?, 'YYYY-MM-DD')", [$to]);
+            }
+
+            $rows = $query
+                ->groupByRaw('TRUNC(i.INVOICE_DATE)')
+                ->orderByRaw('TRUNC(i.INVOICE_DATE) ASC')
+                ->get()
+                ->map(static function (object $row): array {
+                    return [
+                        'date'           => $row->period_date
+                            ? \Illuminate\Support\Carbon::parse((string) $row->period_date)->format('Y-m-d')
+                            : '',
+                        'order_count'    => (int) ($row->order_count ?? 0),
+                        'total_spending' => round((float) ($row->total_spending ?? 0), 2),
+                    ];
+                });
+
+            return response()->json(['history' => $rows]);
+        }
+
+        // ── Top 10 clients by total spending ────────────────────────────────
+        if ($type === 'top_clients') {
+            $cacheKey = 'dss_top_clients_v1';
+            $rows = Cache::remember($cacheKey, 300, static function () use ($conn): array {
+                return $conn->table('INVOICES as i')
+                    ->join('CLIENTS as c', 'c.CLIENT_NO', '=', 'i.CLIENT_NO')
+                    ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
+                    ->leftJoin('PRODUCTS as p', 'p.PRODUCT_NO', '=', 'd.PRODUCT_NO')
+                    ->selectRaw('
+                        c.CLIENT_NO as client_no,
+                        c.CLIENT_NAME as client_name,
+                        COUNT(DISTINCT i.INVOICE_NO) as order_count,
+                        NVL(SUM(d.QTY * NVL(d.PRICE, p.SELL_PRICE)), 0) as total_spending
+                    ')
+                    ->groupBy('c.CLIENT_NO', 'c.CLIENT_NAME')
+                    ->orderByRaw('NVL(SUM(d.QTY * NVL(d.PRICE, p.SELL_PRICE)), 0) DESC')
+                    ->limit(10)
+                    ->get()
+                    ->map(static function (object $row): array {
+                        return [
+                            'client_no'      => (string) ($row->client_no ?? ''),
+                            'client_name'    => (string) ($row->client_name ?? ''),
+                            'order_count'    => (int) ($row->order_count ?? 0),
+                            'total_spending' => round((float) ($row->total_spending ?? 0), 2),
+                        ];
+                    })
+                    ->all();
+            });
+
+            return response()->json(['top_clients' => $rows]);
+        }
+
+        // ── Summary KPI cards ────────────────────────────────────────────────
+        $cacheKey = 'dss_client_summary_v1';
+        $summary = Cache::remember($cacheKey, 300, static function () use ($conn): array {
+            // Highest spending client
+            $top = $conn->table('INVOICES as i')
+                ->join('CLIENTS as c', 'c.CLIENT_NO', '=', 'i.CLIENT_NO')
+                ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
+                ->leftJoin('PRODUCTS as p', 'p.PRODUCT_NO', '=', 'd.PRODUCT_NO')
+                ->selectRaw("c.CLIENT_NAME as client_name, NVL(SUM(d.QTY * NVL(d.PRICE, p.SELL_PRICE)), 0) as total_spending")
+                ->groupBy('c.CLIENT_NO', 'c.CLIENT_NAME')
+                ->orderByRaw('NVL(SUM(d.QTY * NVL(d.PRICE, p.SELL_PRICE)), 0) DESC')
+                ->first();
+
+            // Average spending per client
+            $avgRow = $conn->table('INVOICES as i')
+                ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
+                ->leftJoin('PRODUCTS as p', 'p.PRODUCT_NO', '=', 'd.PRODUCT_NO')
+                ->selectRaw('
+                    NVL(SUM(d.QTY * NVL(d.PRICE, p.SELL_PRICE)), 0) as grand_total,
+                    COUNT(DISTINCT i.CLIENT_NO) as unique_clients
+                ')
+                ->first();
+            $grandTotal    = (float) ($avgRow->grand_total ?? 0);
+            $uniqueClients = (int) ($avgRow->unique_clients ?? 0);
+            $avgSpending   = $uniqueClients > 0 ? round($grandTotal / $uniqueClients, 2) : 0.0;
+
+            // Total active clients (clients with at least one invoice)
+            $activeClients = (int) $conn->table('INVOICES')
+                ->selectRaw('COUNT(DISTINCT CLIENT_NO) as cnt')
+                ->value('cnt');
+
+            // New clients this month: first invoice placed this calendar month
+            $newClientsMonthRow = $conn->selectOne("
+                SELECT COUNT(*) as cnt FROM (
+                    SELECT CLIENT_NO, MIN(INVOICE_DATE) as first_date
+                    FROM INVOICES
+                    GROUP BY CLIENT_NO
+                ) WHERE TRUNC(first_date, 'MM') = TRUNC(SYSDATE, 'MM')
+            ");
+            $newClientsMonth = (int) ($newClientsMonthRow->cnt ?? $newClientsMonthRow->CNT ?? 0);
+
+            // Repeat customer rate
+            $repeatRow = $conn->selectOne("
+                SELECT
+                    COUNT(CASE WHEN invoice_count > 1 THEN 1 END) as repeat_clients,
+                    COUNT(*) as total_clients
+                FROM (
+                    SELECT CLIENT_NO, COUNT(*) as invoice_count
+                    FROM INVOICES
+                    GROUP BY CLIENT_NO
+                )
+            ");
+            $repeatClients = (int) ($repeatRow->repeat_clients ?? $repeatRow->REPEAT_CLIENTS ?? 0);
+            $totalWithInv  = (int) ($repeatRow->total_clients ?? $repeatRow->TOTAL_CLIENTS ?? 0);
+            $repeatRate    = $totalWithInv > 0 ? round(($repeatClients / $totalWithInv) * 100, 1) : 0.0;
+
+            // Top 5 clients by revenue
+            $top5 = $conn->table('INVOICES as i')
+                ->join('CLIENTS as c', 'c.CLIENT_NO', '=', 'i.CLIENT_NO')
+                ->leftJoin('INVOICE_DETAILS as d', 'd.INVOICE_NO', '=', 'i.INVOICE_NO')
+                ->leftJoin('PRODUCTS as p', 'p.PRODUCT_NO', '=', 'd.PRODUCT_NO')
+                ->selectRaw("
+                    c.CLIENT_NAME as client_name,
+                    NVL(SUM(d.QTY * NVL(d.PRICE, p.SELL_PRICE)), 0) as revenue
+                ")
+                ->groupBy('c.CLIENT_NO', 'c.CLIENT_NAME')
+                ->orderByRaw('NVL(SUM(d.QTY * NVL(d.PRICE, p.SELL_PRICE)), 0) DESC')
+                ->limit(5)
+                ->get()
+                ->map(static function (object $row): array {
+                    return [
+                        'client_name' => (string) ($row->client_name ?? ''),
+                        'revenue'     => round((float) ($row->revenue ?? 0), 2),
+                    ];
+                })
+                ->all();
+
+            return [
+                'highest_spending_client' => (string) ($top->client_name ?? 'N/A'),
+                'highest_spending_amount' => round((float) ($top->total_spending ?? 0), 2),
+                'avg_spending'            => $avgSpending,
+                'active_clients'          => $activeClients,
+                'new_clients_month'       => $newClientsMonth,
+                'repeat_rate'             => $repeatRate,
+                'clv'                     => $avgSpending,
+                'top5'                    => $top5,
+                'grand_total'             => round($grandTotal, 2),
+            ];
+        });
+
+        return response()->json($summary);
     }
 
     public function updateClient(Request $request, int $clientNo): RedirectResponse
