@@ -259,11 +259,6 @@
         <div class="actions" style="justify-content: space-between; align-items: flex-start;">
             <div>
                 <h1 class="headline">Products</h1>
-                <p class="subtle">Manage inventory from <code>PRODUCTS</code> and <code>PRODUCT_TYPE</code>.</p>
-            </div>
-            <div class="actions">
-                <span class="chip">Oracle</span>
-                <span class="chip">RBAC</span>
             </div>
         </div>
 
