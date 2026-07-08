@@ -1,7 +1,7 @@
 import asyncio
-import sys
-import os
 import ctypes
+import os
+import sys
 import tempfile
 
 try:
@@ -14,60 +14,50 @@ except ModuleNotFoundError:
     sys.exit(1)
 
 
-async def speak(text: str, output_file: str):
+async def speak(text: str, output_file: str) -> None:
     communicate = edge_tts.Communicate(text=text, voice="km-KH-SreymomNeural")
     await communicate.save(output_file)
 
 
-def play_mp3(file_path: str):
-    """Play an MP3 file using Windows built-in MCI (no extra libraries needed)."""
+def play_mp3(file_path: str) -> None:
+    """Play an MP3 file using Windows built-in MCI."""
     winmm = ctypes.windll.winmm
-    winmm.mciSendStringW(f'open "{file_path}" type mpegvideo alias bakong_audio', None, 0, None)
-    winmm.mciSendStringW('play bakong_audio wait', None, 0, None)
-    winmm.mciSendStringW('close bakong_audio', None, 0, None)
+    winmm.mciSendStringW(f'open "{file_path}" type mpegvideo alias payment_audio', None, 0, None)
+    winmm.mciSendStringW("play payment_audio wait", None, 0, None)
+    winmm.mciSendStringW("close payment_audio", None, 0, None)
 
 
 def format_amount(amount_str: str, currency: str) -> str:
-    """Format amount for natural Khmer speech."""
     try:
         amount = float(amount_str)
-        if currency == "KHR":
+        if currency == "KHR" or amount == int(amount):
             return str(int(amount))
-        else:
-            # Remove trailing zeros for USD, e.g. 1.20 -> 1.20, 1.00 -> 1
-            if amount == int(amount):
-                return str(int(amount))
-            return f"{amount:.2f}"
+        return f"{amount:.2f}"
     except ValueError:
         return amount_str
 
 
-if __name__ == "__main__":
-    amount_str = sys.argv[1] if len(sys.argv) > 1 else "0"
-    currency = sys.argv[2].upper() if len(sys.argv) > 2 else "KHR"
-    debt_str = sys.argv[3] if len(sys.argv) > 3 else "0"
-
+def payment_text(amount_str: str, currency: str, debt_str: str) -> str:
     formatted = format_amount(amount_str, currency)
-
     try:
         debt = float(debt_str)
     except ValueError:
         debt = 0.0
 
-    if currency == "USD":
-        if debt > 0:
-            formatted_debt = format_amount(str(round(debt, 2)), currency)
-            text = f"បានទទួល {formatted} ដុល្លារ និងជំពាក់ {formatted_debt} ដុល្លារ"
-        else:
-            text = f"បានទទួល {formatted} ដុល្លារ សូមអរគុណ!"
-    else:
-        if debt > 0:
-            formatted_debt = format_amount(str(round(debt, 2)), currency)
-            text = f"បានទទួល {formatted} រៀល និងជំពាក់ {formatted_debt} រៀល"
-        else:
-            text = f"បានទទួល {formatted} រៀល សូមអរគុណ!"
+    currency_name = "ដុល្លារ" if currency == "USD" else "រៀល"
+    if debt > 0:
+        formatted_debt = format_amount(str(round(debt, 2)), currency)
+        return f"បានទទួល {formatted} {currency_name} និងជំពាក់ {formatted_debt} {currency_name}"
 
-    output_file = os.path.join(tempfile.gettempdir(), "bakong_receive.mp3")
+    return f"បានទទួល {formatted} {currency_name} សូមអរគុណ!"
 
-    asyncio.run(speak(text, output_file))
+
+if __name__ == "__main__":
+    amount_arg = sys.argv[1] if len(sys.argv) > 1 else "0"
+    currency_arg = sys.argv[2].upper() if len(sys.argv) > 2 else "KHR"
+    debt_arg = sys.argv[3] if len(sys.argv) > 3 else "0"
+    currency_arg = "USD" if currency_arg == "USD" else "KHR"
+
+    output_file = os.path.join(tempfile.gettempdir(), "pos_payment_receive.mp3")
+    asyncio.run(speak(payment_text(amount_arg, currency_arg, debt_arg), output_file))
     play_mp3(output_file)

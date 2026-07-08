@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Support\BakongQR;
 use App\Support\PaymentAlertNotifier;
-use App\Support\PythonExecutable;
 use App\Support\SessionCart;
 use App\Support\StaffAuth;
 use App\Support\StockAlertNotifier;
+use App\Support\SystemSpeechNotifier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
@@ -1375,6 +1375,7 @@ class EcommerceController extends Controller
 
         if ($invoiceNo !== null && $paymentType !== 'qr') {
             $this->notifyTelegramPaymentAlert((int) $invoiceNo, (string) $paymentType, $recieveAmount, $currencyNo);
+            $this->notifySystemPaymentSpeech((int) $invoiceNo, $recieveAmount, $currencyNo);
         }
         $this->notifyTelegramStockAlertAfterSale($soldProductNos, $beforeUnderstock);
 
@@ -1509,6 +1510,7 @@ class EcommerceController extends Controller
 
         if ($paymentType !== 'qr') {
             $this->notifyTelegramPaymentAlert($invoiceNo, (string) $paymentType, $recieveAmount, $currencyNo);
+            $this->notifySystemPaymentSpeech($invoiceNo, $recieveAmount, $currencyNo);
         }
         $this->notifyTelegramStockAlertAfterSale($soldProductNos, $beforeUnderstock);
 
@@ -2272,6 +2274,9 @@ class EcommerceController extends Controller
         }
 
         $this->notifyTelegramPaymentAlert($invoiceNo, (string) $paymentType, $recieveAmount, $resolvedCurrencyNo);
+        if ($paymentType !== 'qr') {
+            $this->notifySystemPaymentSpeech($invoiceNo, $recieveAmount, $resolvedCurrencyNo);
+        }
 
         if ($nextStatus === 'Completed') {
             return redirect()
@@ -3414,6 +3419,33 @@ class EcommerceController extends Controller
         }
     }
 
+    private function notifySystemPaymentSpeech(int $invoiceNo, float $paidAmountLocal, ?int $currencyNo = null): void
+    {
+        try {
+            $resolvedCurrencyNo = $currencyNo !== null && $currencyNo > 0
+                ? $currencyNo
+                : $this->defaultCurrencyNo();
+            $rateToUsd = $resolvedCurrencyNo !== null ? $this->currencyRateToUsd($resolvedCurrencyNo) : 1.0;
+            if ($rateToUsd <= 0) {
+                $rateToUsd = 1.0;
+            }
+
+            $debtUsd = round(max(0, $this->resolveInvoiceDebtAmount($invoiceNo)), 2);
+            $debtLocal = round($debtUsd * $rateToUsd, 2);
+
+            SystemSpeechNotifier::speakPayment(
+                round(max(0, $paidAmountLocal), 2),
+                $this->currencyCode($resolvedCurrencyNo),
+                $debtLocal
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Failed to dispatch system payment speech.', [
+                'invoice_no' => $invoiceNo,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function normalizedDiscountRate(float $discount): float
     {
         if ($discount <= 0) {
@@ -3575,15 +3607,11 @@ class EcommerceController extends Controller
                 $paidAmount = $amount !== null ? (float) $amount : 0.0;
                 $debt = $invoiceGrandTotal > 0 ? round(max(0, $invoiceGrandTotal - $paidAmount), 2) : 0.0;
 
-                // Fire-and-forget: play Khmer TTS sound
-                $script = base_path('python/system_speech/khmer_tts.py');
-                $pythonBin = PythonExecutable::resolve((string) env('SYSTEM_SPEECH_PYTHON_BIN', env('TELEGRAM_PYTHON_BIN', 'python')));
-                if ($pythonBin !== null) {
-                    $amountArg = escapeshellarg((string) ($amount ?? '0'));
-                    $currencyArg = escapeshellarg($currency ?? 'KHR');
-                    $debtArg = escapeshellarg((string) $debt);
-                    $pythonArg = escapeshellarg($pythonBin);
-                    pclose(popen("start /B \"\" {$pythonArg} \"{$script}\" {$amountArg} {$currencyArg} {$debtArg}", 'r'));
+                $speechKey = 'system_speech_qr_sent:'.strtolower((string) $md5);
+                if (! Cache::get($speechKey, false)) {
+                    if (SystemSpeechNotifier::speakPayment($paidAmount, (string) ($currency ?: 'KHR'), $debt)) {
+                        Cache::put($speechKey, true, now()->addDays(7));
+                    }
                 }
 
                 // Send Telegram payment alert only after confirmed bank success.
