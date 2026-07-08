@@ -578,10 +578,14 @@
                 <span style="font-size:.95rem;color:#888;">{{ $bakongQrCurrency }}</span>
             </div>
             <div id="bakong-qr-container" style="display:inline-block;padding:12px;background:#fff;border-radius:12px;border:2px solid #e5e7eb;"></div>
+            <div id="bakong-check-status" role="status" aria-live="polite"
+                 style="margin-top:12px;color:#52606d;font-size:.92rem;">
+                Checking payment...
+            </div>
             <div style="margin-top:16px;">
                 <button type="button" id="bakong-qr-close-btn" class="btn btn-primary"
                         onclick="document.getElementById('bakong-qr-modal').style.display='none';"
-                        style="min-width:120px;">Close</button>
+                        style="min-width:120px;">Hide</button>
             </div>
         </div>
         <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
@@ -612,8 +616,18 @@
                 const fallbackAmount   = @json((float) session('bakong_qr_amount', 0));
                 const fallbackCurrency = @json($bakongQrCurrency);
                 let pollTimer = null;
+                let finished = false;
 
-                const stopPolling = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
+                const statusEl = document.getElementById('bakong-check-status');
+                const setStatus = (text, color = '#52606d') => {
+                    if (!statusEl) return;
+                    statusEl.textContent = text;
+                    statusEl.style.color = color;
+                };
+
+                const schedulePoll = () => {
+                    if (!finished) pollTimer = window.setTimeout(poll, 3000);
+                };
 
                 const showReceiveToast = (text) => {
                     const main = document.querySelector('main.content');
@@ -626,11 +640,14 @@
 
                 const poll = async () => {
                     try {
-                        const res = await fetch(checkUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                        if (!res.ok) return;
+                        const res = await fetch(checkUrl, {
+                            cache: 'no-store',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
                         const data = await res.json();
                         if (data.paid) {
-                            stopPolling();
+                            finished = true;
+                            if (pollTimer) window.clearTimeout(pollTimer);
                             const modal = document.getElementById('bakong-qr-modal');
                             if (modal) modal.style.display = 'none';
                             const currency = (data.currency || fallbackCurrency).toUpperCase();
@@ -640,12 +657,20 @@
                                 ? parseFloat(data.amount).toFixed(decimals)
                                 : parseFloat(fallbackAmount).toFixed(decimals);
                             showReceiveToast('Receive: ' + prefix + amount + ' ' + currency);
+                            window.setTimeout(() => window.location.reload(), 900);
+                            return;
                         }
-                    } catch (_) {}
+                        setStatus(
+                            data.message || 'Checking payment...',
+                            res.ok ? '#52606d' : '#b42318'
+                        );
+                    } catch (_) {
+                        setStatus('Connection interrupted. Retrying automatically...', '#b45309');
+                    }
+                    schedulePoll();
                 };
 
-                pollTimer = setInterval(poll, 3000);
-                document.getElementById('bakong-qr-close-btn')?.addEventListener('click', stopPolling);
+                poll();
             })();
         </script>
     </div>

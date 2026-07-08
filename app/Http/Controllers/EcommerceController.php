@@ -1288,6 +1288,9 @@ class EcommerceController extends Controller
         $recieveAmount = (float) ($validated['recieve_amount'] ?? 0);
         $currencyNo = $this->resolveCurrencyNoFromInput($validated['payment_currency']);
         $paymentType = $validated['payment_type'] ?? 'cash';
+        if ($paymentType === 'qr' && $recieveAmount <= 0) {
+            return back()->withInput()->with('error', 'QR payment amount must be greater than zero.');
+        }
 
         $staff = StaffAuth::user();
         $employeeId = (int) ($staff['employee_id'] ?? 0);
@@ -1336,14 +1339,17 @@ class EcommerceController extends Controller
         }
 
         $paymentAmount = (float) ($validated['payment_amount'] ?? 0);
-        $invoiceStatus = $recieveAmount >= $paymentAmount ? 'Completed' : 'In Debt';
+        // A QR amount is only a payment request until Bakong confirms it.
+        $invoiceStatus = $paymentType === 'qr'
+            ? 'In Debt'
+            : ($recieveAmount >= $paymentAmount ? 'Completed' : 'In Debt');
         $soldProductNos = $this->productNosFromItems($items);
         $beforeUnderstock = $this->understockFlagsForProductNos($soldProductNos);
 
         try {
             $conn = $this->db();
             $invoiceNo = null;
-            $conn->transaction(function () use ($conn, $clientNo, $employeeId, $validated, $items, $recieveAmount, $currencyNo, $invoiceStatus, &$invoiceNo): void {
+            $conn->transaction(function () use ($conn, $clientNo, $employeeId, $validated, $items, $recieveAmount, $currencyNo, $paymentType, $invoiceStatus, &$invoiceNo): void {
                 $invoiceNo = $this->createInvoice(
                     $clientNo,
                     $employeeId,
@@ -1367,7 +1373,9 @@ class EcommerceController extends Controller
                 }
 
                 $grandTotal = $this->invoiceGrandTotal($invoiceNo);
-                $this->upsertPayment($invoiceNo, $grandTotal, $recieveAmount, $currencyNo);
+                if ($paymentType !== 'qr') {
+                    $this->upsertPayment($invoiceNo, $grandTotal, $recieveAmount, $currencyNo);
+                }
             }, 3);
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', 'Failed to create invoice: '.$e->getMessage());
@@ -1400,9 +1408,18 @@ class EcommerceController extends Controller
             }
 
             if ($qrString) {
+                $qrMd5 = md5($qrString);
+                $this->rememberPendingBakongPayment(
+                    $qrMd5,
+                    (int) $invoiceNo,
+                    $qrAmount,
+                    $qrCurrencyCode,
+                    $currencyNo,
+                    0.0
+                );
                 $redirect
                     ->with('bakong_qr', $qrString)
-                    ->with('bakong_qr_md5', md5($qrString))
+                    ->with('bakong_qr_md5', $qrMd5)
                     ->with('bakong_qr_amount', $qrAmount)
                     ->with('bakong_qr_currency', $qrCurrencyCode)
                     ->with('bakong_qr_grand_total', $qrGrandTotal)
@@ -1487,9 +1504,12 @@ class EcommerceController extends Controller
         }
         $soldProductNos = $this->productNosFromItems($items);
         $beforeUnderstock = $this->understockFlagsForProductNos($soldProductNos);
+        $qrBaselineReceivedUsd = $paymentType === 'qr'
+            ? $this->resolveInvoiceReceivedAmount($invoiceNo)
+            : 0.0;
 
         try {
-            $conn->transaction(function () use ($conn, $invoiceNo, $items, $recieveAmount, $currencyNo): void {
+            $conn->transaction(function () use ($conn, $invoiceNo, $items, $recieveAmount, $currencyNo, $paymentType, $qrBaselineReceivedUsd): void {
                 foreach ($items as $item) {
                     $conn->insert(
                         'INSERT INTO INVOICE_DETAILS (INVOICE_NO, PRODUCT_NO, QTY) VALUES (:invoice_no, :product_no, :qty)',
@@ -1502,7 +1522,17 @@ class EcommerceController extends Controller
                 }
 
                 $grandTotal = $this->invoiceGrandTotal($invoiceNo);
-                $this->upsertPayment($invoiceNo, $grandTotal, $recieveAmount, $currencyNo);
+                $paymentReceiveAmount = $recieveAmount;
+                if ($paymentType === 'qr') {
+                    $rateToUsd = $currencyNo !== null && $currencyNo > 0
+                        ? $this->currencyRateToUsd($currencyNo)
+                        : 1.0;
+                    if ($rateToUsd <= 0) {
+                        $rateToUsd = 1.0;
+                    }
+                    $paymentReceiveAmount = round($qrBaselineReceivedUsd * $rateToUsd, 2);
+                }
+                $this->upsertPayment($invoiceNo, $grandTotal, $paymentReceiveAmount, $currencyNo);
             }, 3);
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', 'Unable to add invoice items: '.$e->getMessage());
@@ -1535,9 +1565,18 @@ class EcommerceController extends Controller
             }
 
             if ($qrString) {
+                $qrMd5 = md5($qrString);
+                $this->rememberPendingBakongPayment(
+                    $qrMd5,
+                    $invoiceNo,
+                    $qrAmount,
+                    $qrCurrencyCode,
+                    $currencyNo,
+                    $qrBaselineReceivedUsd
+                );
                 $redirect
                     ->with('bakong_qr', $qrString)
-                    ->with('bakong_qr_md5', md5($qrString))
+                    ->with('bakong_qr_md5', $qrMd5)
                     ->with('bakong_qr_amount', $qrAmount)
                     ->with('bakong_qr_currency', $qrCurrencyCode)
                     ->with('bakong_qr_grand_total', $qrGrandTotal)
@@ -3577,23 +3616,51 @@ class EcommerceController extends Controller
 
     public function checkBakongTransaction(Request $request): JsonResponse
     {
-        $md5 = $request->query('md5');
+        $md5 = strtolower(trim((string) $request->query('md5', '')));
         if (!$md5 || !preg_match('/^[a-f0-9]{32}$/i', $md5)) {
-            return response()->json(['paid' => false]);
+            return response()->json([
+                'paid' => false,
+                'status' => 'invalid',
+                'message' => 'Invalid QR transaction reference.',
+            ], 422);
         }
 
         $token = (string) config('bakong.token', '');
         if (!$token) {
-            return response()->json(['paid' => false]);
-        }
+            Log::error('Bakong transaction check skipped because BAKONG_TOKEN is not configured.');
 
-        $invoiceGrandTotal = (float) $request->query('grand_total', 0);
-        $invoiceNo = (int) $request->query('invoice_no', 0);
+            return response()->json([
+                'paid' => false,
+                'status' => 'unavailable',
+                'message' => 'Bakong transaction checking is not configured.',
+            ], 503);
+        }
 
         try {
             $response = Http::withoutVerifying()
                 ->withToken($token)
+                ->acceptJson()
+                ->asJson()
+                ->timeout(10)
+                ->retry(2, 250, null, false)
                 ->post('https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5', ['md5' => $md5]);
+
+            if (! $response->successful()) {
+                Log::warning('Bakong transaction check returned an HTTP error.', [
+                    'md5' => $md5,
+                    'http_status' => $response->status(),
+                ]);
+
+                $message = $response->status() === 401
+                    ? 'Bakong API token expired. Renew BAKONG_TOKEN to continue checking.'
+                    : 'Unable to reach Bakong. Checking will continue.';
+
+                return response()->json([
+                    'paid' => false,
+                    'status' => 'unavailable',
+                    'message' => $message,
+                ], 503);
+            }
 
             $result = $response->json();
             $paid = isset($result['responseCode']) && (int) $result['responseCode'] === 0 && !empty($result['data']);
@@ -3602,10 +3669,40 @@ class EcommerceController extends Controller
             if ($paid) {
                 $data = (array) ($result['data'] ?? []);
                 $amount = $data['amount'] ?? null;
-                $currency = isset($data['currency']) ? strtoupper((string) $data['currency']) : null;
+                $currency = $this->normalizeBakongCurrency($data['currency'] ?? null);
 
                 $paidAmount = $amount !== null ? (float) $amount : 0.0;
-                $debt = $invoiceGrandTotal > 0 ? round(max(0, $invoiceGrandTotal - $paidAmount), 2) : 0.0;
+                if ($paidAmount <= 0) {
+                    Log::warning('Bakong reported a paid transaction without a valid amount.', ['md5' => $md5]);
+
+                    return response()->json([
+                        'paid' => false,
+                        'status' => 'processing_error',
+                        'message' => 'Payment was found, but its amount could not be verified.',
+                    ]);
+                }
+
+                $pending = Cache::get('bakong_qr_pending:'.$md5);
+                $invoiceNo = (int) (is_array($pending)
+                    ? ($pending['invoice_no'] ?? 0)
+                    : $request->query('invoice_no', 0));
+                $currencyNo = is_array($pending)
+                    ? ($pending['currency_no'] ?? null)
+                    : $request->query('currency_no');
+                $baselineReceivedUsd = is_array($pending)
+                    ? (float) ($pending['baseline_received_usd'] ?? 0)
+                    : null;
+
+                $processed = $this->processConfirmedBakongPayment(
+                    $md5,
+                    $invoiceNo,
+                    $paidAmount,
+                    (string) ($currency ?: 'USD'),
+                    is_numeric($currencyNo) ? (int) $currencyNo : null,
+                    $baselineReceivedUsd
+                );
+                $invoiceGrandTotal = (float) ($processed['grand_total_payment'] ?? 0);
+                $debt = (float) ($processed['debt_payment'] ?? 0);
 
                 $speechKey = 'system_speech_qr_sent:'.strtolower((string) $md5);
                 if (! Cache::get($speechKey, false)) {
@@ -3641,11 +3738,158 @@ class EcommerceController extends Controller
                         }
                     }
                 }
+
+                return response()->json([
+                    'paid' => true,
+                    'status' => 'processed',
+                    'amount' => $paidAmount,
+                    'currency' => $currency,
+                    'invoice_no' => $invoiceNo,
+                    'invoice_status' => $processed['invoice_status'] ?? null,
+                    'debt' => $debt,
+                ]);
             }
-            return response()->json(['paid' => $paid, 'amount' => $amount, 'currency' => $currency]);
+
+            return response()->json([
+                'paid' => false,
+                'status' => 'pending',
+                'message' => 'Waiting for payment confirmation...',
+            ]);
         } catch (\Throwable $e) {
-            return response()->json(['paid' => false]);
+            Log::error('Bakong transaction check failed.', [
+                'md5' => $md5,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'paid' => false,
+                'status' => 'processing_error',
+                'message' => 'Payment checking failed. Retrying automatically...',
+            ]);
         }
+    }
+
+    private function rememberPendingBakongPayment(
+        string $md5,
+        int $invoiceNo,
+        float $amount,
+        string $currency,
+        ?int $currencyNo,
+        float $baselineReceivedUsd
+    ): void {
+        Cache::put('bakong_qr_pending:'.strtolower($md5), [
+            'invoice_no' => $invoiceNo,
+            'amount' => $amount,
+            'currency' => mb_strtoupper($currency),
+            'currency_no' => $currencyNo,
+            'baseline_received_usd' => round(max(0, $baselineReceivedUsd), 2),
+        ], now()->addDay());
+    }
+
+    /**
+     * @return array{
+     *     grand_total: float,
+     *     debt: float,
+     *     grand_total_payment: float,
+     *     debt_payment: float,
+     *     invoice_status: string
+     * }
+     */
+    private function processConfirmedBakongPayment(
+        string $md5,
+        int $invoiceNo,
+        float $paidAmount,
+        string $currency,
+        ?int $currencyNo,
+        ?float $baselineReceivedUsd
+    ): array {
+        if ($invoiceNo <= 0 || ! $this->db()->table('INVOICES')->where('INVOICE_NO', $invoiceNo)->exists()) {
+            throw new RuntimeException('The invoice linked to this QR payment was not found.');
+        }
+
+        $processedKey = 'bakong_qr_processed:'.$md5;
+        $lock = Cache::lock('bakong_qr_process_lock:'.$md5, 15);
+
+        return $lock->block(5, function () use (
+            $processedKey,
+            $invoiceNo,
+            $paidAmount,
+            $currency,
+            $currencyNo,
+            $baselineReceivedUsd
+        ): array {
+            $alreadyProcessed = Cache::get($processedKey);
+            if (is_array($alreadyProcessed)) {
+                return $alreadyProcessed;
+            }
+
+            $resolvedCurrencyNo = $this->resolveCurrencyNoFromInput($currency)
+                ?? ($currencyNo !== null && $currencyNo > 0 ? $currencyNo : $this->defaultCurrencyNo());
+            $rateToUsd = $resolvedCurrencyNo !== null
+                ? $this->currencyRateToUsd($resolvedCurrencyNo)
+                : 1.0;
+            if ($rateToUsd <= 0) {
+                $rateToUsd = 1.0;
+            }
+
+            $paidAmountUsd = round(max(0, $paidAmount / $rateToUsd), 2);
+            $grandTotal = $this->invoiceGrandTotal($invoiceNo);
+            $currentReceivedUsd = $this->resolveInvoiceReceivedAmount($invoiceNo);
+
+            if ($baselineReceivedUsd !== null) {
+                $totalReceivedUsd = round(max(
+                    $currentReceivedUsd,
+                    max(0, $baselineReceivedUsd) + $paidAmountUsd
+                ), 2);
+            } else {
+                // Legacy QR invoices provisionally stored the requested amount before
+                // confirmation. Taking the greater value prevents a duplicate payment.
+                $totalReceivedUsd = round(max($currentReceivedUsd, $paidAmountUsd), 2);
+            }
+            $totalReceivedLocal = round($totalReceivedUsd * $rateToUsd, 2);
+            $debt = round(max(0, $grandTotal - $totalReceivedUsd), 2);
+            $invoiceStatus = $debt > 0 ? 'In Debt' : 'Completed';
+
+            $this->db()->transaction(function () use (
+                $invoiceNo,
+                $grandTotal,
+                $totalReceivedLocal,
+                $resolvedCurrencyNo,
+                $invoiceStatus
+            ): void {
+                $this->upsertPayment(
+                    $invoiceNo,
+                    $grandTotal,
+                    $totalReceivedLocal,
+                    $resolvedCurrencyNo
+                );
+                $this->db()->table('INVOICES')
+                    ->where('INVOICE_NO', $invoiceNo)
+                    ->update(['INVOICE_STATUS' => $invoiceStatus]);
+            }, 3);
+
+            $processed = [
+                'grand_total' => $grandTotal,
+                'debt' => $debt,
+                'grand_total_payment' => round($grandTotal * $rateToUsd, 2),
+                'debt_payment' => round($debt * $rateToUsd, 2),
+                'invoice_status' => $invoiceStatus,
+            ];
+            Cache::put($processedKey, $processed, now()->addDays(7));
+
+            return $processed;
+        });
+    }
+
+    private function normalizeBakongCurrency(mixed $currency): ?string
+    {
+        $value = mb_strtoupper(trim((string) $currency));
+
+        return match ($value) {
+            '116', 'KHR' => 'KHR',
+            '840', 'USD' => 'USD',
+            default => $value !== '' ? $value : null,
+        };
     }
 
     private function normalizeColumnToken(string $name): string
