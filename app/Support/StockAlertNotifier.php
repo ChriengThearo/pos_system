@@ -75,6 +75,45 @@ class StockAlertNotifier
     }
 
     /**
+     * Trigger Telegram after a sale causes at least one sold product to enter understock.
+     */
+    public static function notifyFromSaleContext(int $underStockCount, bool $hasNewUnderStock, bool $dryRun = false): int
+    {
+        if (! $hasNewUnderStock) {
+            return 0;
+        }
+
+        if (! filter_var((string) env('TELEGRAM_STOCK_ALERT_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+            return 0;
+        }
+
+        $underStockCount = max(0, $underStockCount);
+        if ($underStockCount === 0) {
+            Cache::forget(self::LAST_COUNT_CACHE_KEY);
+
+            return 0;
+        }
+
+        try {
+            return (int) Cache::lock(self::LOCK_CACHE_KEY, 5)->block(2, function () use ($underStockCount, $dryRun): int {
+                $exitCode = self::runMonitorOnce($dryRun);
+                if ($exitCode === 0) {
+                    Cache::forever(self::LAST_COUNT_CACHE_KEY, $underStockCount);
+                }
+
+                return $exitCode;
+            });
+        } catch (\Throwable $e) {
+            Log::warning('Failed to process sale-driven Telegram stock alert.', [
+                'under_stock_count' => $underStockCount,
+                'error' => $e->getMessage(),
+            ]);
+
+            return 1;
+        }
+    }
+
+    /**
      * Run the Telegram stock alert monitor once.
      *
      * Returns process exit code (0 on success).

@@ -7,6 +7,7 @@ use App\Support\PaymentAlertNotifier;
 use App\Support\PythonExecutable;
 use App\Support\SessionCart;
 use App\Support\StaffAuth;
+use App\Support\StockAlertNotifier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
@@ -327,6 +328,8 @@ class EcommerceController extends Controller
 
         $conn = $this->db();
         $clientType = $this->resolveClientType($validated['client_type'] ?? null);
+        $soldProductNos = $this->productNosFromItems($items);
+        $beforeUnderstock = $this->understockFlagsForProductNos($soldProductNos);
 
         try {
             $invoiceNo = $conn->transaction(function () use ($validated, $items, $clientType, $employeeId): int {
@@ -358,6 +361,7 @@ class EcommerceController extends Controller
         }
 
         $this->cart->clear();
+        $this->notifyTelegramStockAlertAfterSale($soldProductNos, $beforeUnderstock);
 
         return redirect()
             ->route('store.orders.show', ['invoiceNo' => $invoiceNo])
@@ -1333,6 +1337,8 @@ class EcommerceController extends Controller
 
         $paymentAmount = (float) ($validated['payment_amount'] ?? 0);
         $invoiceStatus = $recieveAmount >= $paymentAmount ? 'Completed' : 'In Debt';
+        $soldProductNos = $this->productNosFromItems($items);
+        $beforeUnderstock = $this->understockFlagsForProductNos($soldProductNos);
 
         try {
             $conn = $this->db();
@@ -1370,6 +1376,7 @@ class EcommerceController extends Controller
         if ($invoiceNo !== null && $paymentType !== 'qr') {
             $this->notifyTelegramPaymentAlert((int) $invoiceNo, (string) $paymentType, $recieveAmount, $currencyNo);
         }
+        $this->notifyTelegramStockAlertAfterSale($soldProductNos, $beforeUnderstock);
 
         $redirect = redirect()
             ->route('invoices.index', ['invoice_no' => $invoiceNo])
@@ -1477,6 +1484,8 @@ class EcommerceController extends Controller
                 return back()->withInput()->with('error', "Only {$available} unit(s) are available for product {$productNo}.");
             }
         }
+        $soldProductNos = $this->productNosFromItems($items);
+        $beforeUnderstock = $this->understockFlagsForProductNos($soldProductNos);
 
         try {
             $conn->transaction(function () use ($conn, $invoiceNo, $items, $recieveAmount, $currencyNo): void {
@@ -1501,6 +1510,7 @@ class EcommerceController extends Controller
         if ($paymentType !== 'qr') {
             $this->notifyTelegramPaymentAlert($invoiceNo, (string) $paymentType, $recieveAmount, $currencyNo);
         }
+        $this->notifyTelegramStockAlertAfterSale($soldProductNos, $beforeUnderstock);
 
         $redirect = redirect()
             ->route('invoices.index', ['invoice_no' => $invoiceNo])
@@ -2371,6 +2381,90 @@ class EcommerceController extends Controller
             ')
             ->where('p.PRODUCT_NO', '=', $productNo)
             ->first();
+    }
+
+    private function productNosFromItems(Collection $items): array
+    {
+        return $items
+            ->map(static fn (array $item): string => trim((string) ($item['product_no'] ?? '')))
+            ->filter(static fn (string $productNo): bool => $productNo !== '')
+            ->map(static fn (string $productNo): string => mb_strtoupper($productNo))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function understockFlagsForProductNos(array $productNos): array
+    {
+        $productNos = array_values(array_unique(array_filter(array_map(
+            static fn (string $productNo): string => mb_strtoupper(trim($productNo)),
+            $productNos
+        ))));
+
+        if ($productNos === []) {
+            return [];
+        }
+
+        try {
+            return $this->db()->table('PRODUCTS')
+                ->selectRaw("UPPER(PRODUCT_NO) as product_no, CASE WHEN UPPER(NVL(STATUS, 'UNKNOWN')) = 'UNDERSTOCK' THEN 1 ELSE 0 END as is_understock")
+                ->whereIn('PRODUCT_NO', $productNos)
+                ->get()
+                ->mapWithKeys(static function (object $row): array {
+                    $productNo = mb_strtoupper((string) ($row->product_no ?? $row->PRODUCT_NO ?? ''));
+
+                    return [$productNo => ((int) ($row->is_understock ?? $row->IS_UNDERSTOCK ?? 0)) === 1];
+                })
+                ->all();
+        } catch (\Throwable $e) {
+            Log::warning('Failed to read understock flags for sold products.', [
+                'product_nos' => $productNos,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    private function notifyTelegramStockAlertAfterSale(array $productNos, array $beforeUnderstock): void
+    {
+        if ($productNos === []) {
+            return;
+        }
+
+        $afterUnderstock = $this->understockFlagsForProductNos($productNos);
+        $newUnderstock = [];
+
+        foreach ($productNos as $productNo) {
+            $key = mb_strtoupper(trim((string) $productNo));
+            if (($afterUnderstock[$key] ?? false) && ! ($beforeUnderstock[$key] ?? false)) {
+                $newUnderstock[] = $key;
+            }
+        }
+
+        if ($newUnderstock === []) {
+            return;
+        }
+
+        try {
+            $underStockCount = (int) $this->db()->table('PRODUCTS')
+                ->whereRaw("UPPER(NVL(STATUS, 'UNKNOWN')) = ?", ['UNDERSTOCK'])
+                ->count();
+
+            $exitCode = StockAlertNotifier::notifyFromSaleContext($underStockCount, true);
+            if ($exitCode !== 0) {
+                Log::warning('Sale-driven Telegram stock alert did not complete successfully.', [
+                    'exit_code' => $exitCode,
+                    'new_understock_product_nos' => $newUnderstock,
+                    'under_stock_count' => $underStockCount,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Failed to dispatch sale-driven Telegram stock alert.', [
+                'new_understock_product_nos' => $newUnderstock,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function cartItemsWithLiveData(): Collection
