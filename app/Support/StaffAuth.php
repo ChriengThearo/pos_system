@@ -711,19 +711,20 @@ SQL);
         }
     }
 
-    private static function syncReturnPermissions(ConnectionInterface $conn): void
+    private static function syncReturnPermissions(ConnectionInterface $conn): bool
     {
         if (! self::tableExists($conn, 'PERMISSION_GROUP')) {
-            return;
+            return false;
         }
 
         $formMap = self::permissionCodeToFormIdMap($conn);
         $returnsReadId = $formMap['returns.read'] ?? null;
         $returnsManageId = $formMap['returns.manage'] ?? null;
         if (! $returnsReadId || ! $returnsManageId) {
-            return;
+            return false;
         }
 
+        $changed = false;
         $groupMap = self::groupNameToIdMap($conn);
         foreach (['STORE MANAGER', 'ASSISTANT MANAGER', 'CASHIER'] as $role) {
             $groupId = $groupMap[self::normalizeRole($role)] ?? null;
@@ -731,9 +732,16 @@ SQL);
                 continue;
             }
 
-            self::insertPermissionGroup($conn, (int) $groupId, (int) $returnsReadId);
-            self::insertPermissionGroup($conn, (int) $groupId, (int) $returnsManageId);
+            $changed = self::ensurePermissionGroup($conn, (int) $groupId, (int) $returnsReadId) || $changed;
+            $changed = self::ensurePermissionGroup($conn, (int) $groupId, (int) $returnsManageId) || $changed;
         }
+
+        if ($changed) {
+            self::$rolePermissionsCache = null;
+            self::$permissionCatalogCache = null;
+        }
+
+        return $changed;
     }
 
     /**
@@ -864,6 +872,22 @@ SQL);
                 throw $e;
             }
         }
+    }
+
+    private static function ensurePermissionGroup(ConnectionInterface $conn, int $groupId, int $formId): bool
+    {
+        $exists = (bool) $conn->table('PERMISSION_GROUP')
+            ->where('G_ID', '=', $groupId)
+            ->where('FORM_ID', '=', $formId)
+            ->exists();
+
+        if ($exists) {
+            return false;
+        }
+
+        self::insertPermissionGroup($conn, $groupId, $formId);
+
+        return true;
     }
 
     private static function loadPermissionCatalogFromDb(): array
