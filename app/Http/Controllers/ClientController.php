@@ -191,6 +191,20 @@ class ClientController extends Controller
 
     public function dss(Request $request): JsonResponse
     {
+        try {
+            return $this->dssHandle($request);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('DSS endpoint error', [
+                'type'    => $request->query('type'),
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    private function dssHandle(Request $request): JsonResponse
+    {
         $conn = DB::connection('oracle');
         $type = trim((string) $request->query('type', 'summary'));
 
