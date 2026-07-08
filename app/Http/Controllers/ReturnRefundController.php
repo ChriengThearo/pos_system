@@ -82,16 +82,36 @@ class ReturnRefundController extends Controller
 
         $selectedInvoice = $selectedInvoiceNo > 0 ? $this->invoicePayload($selectedInvoiceNo) : null;
 
+        // Stats for top metric cards
+        $totalReturns = 0;
+        $pendingReturns = 0;
+        $totalRefunded = 0.0;
+        try {
+            $statsRow = $conn->selectOne("
+                SELECT
+                    COUNT(DISTINCT r.RETURN_NO) as total_returns,
+                    COUNT(DISTINCT CASE WHEN UPPER(r.STATUS) = 'PENDING' THEN r.RETURN_NO END) as pending_returns,
+                    NVL(SUM(NVL(rd.REFUND_AMOUNT, 0)), 0) as total_refunded
+                FROM RETURNS r
+                LEFT JOIN RETURN_DETAILS rd ON rd.RETURN_NO = r.RETURN_NO
+            ");
+            $totalReturns   = (int) ($statsRow->total_returns ?? $statsRow->TOTAL_RETURNS ?? 0);
+            $pendingReturns = (int) ($statsRow->pending_returns ?? $statsRow->PENDING_RETURNS ?? 0);
+            $totalRefunded  = round((float) ($statsRow->total_refunded ?? $statsRow->TOTAL_REFUNDED ?? 0), 2);
+        } catch (\Throwable) {
+        }
+
         return view('ecommerce.returns', [
             'returns' => $returns,
             'q' => $q,
             'recentInvoices' => $recentInvoices,
             'selectedInvoiceNo' => $selectedInvoiceNo > 0 ? $selectedInvoiceNo : null,
             'selectedInvoice' => $selectedInvoice,
-            'returnColumns' => $this->tableMetadata('RETURNS'),
-            'returnDetailColumns' => $this->tableMetadata('RETURN_DETAILS'),
             'canManageReturns' => StaffAuth::can('returns.manage'),
             'inProcessCount' => $this->countInProcessInvoices(),
+            'totalReturns' => $totalReturns,
+            'pendingReturns' => $pendingReturns,
+            'totalRefunded' => $totalRefunded,
         ]);
     }
 

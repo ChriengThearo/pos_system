@@ -1,0 +1,105 @@
+# Master Prompt: Redesign Return/Refunds Page to Match Products Page Design System
+
+Copy everything in the code block below and paste it into your AI coding tool (Cursor, v0, Claude Code, etc.), along with the two reference screenshots.
+
+---
+
+```
+TASK
+Redesign the "Return/Refunds" page in our Electronic Store admin panel so it visually
+and structurally matches the established design system used on the "Products" page.
+Do NOT change any underlying data, fields, business logic, or the RETURNS /
+RETURN_DETAILS schema — this is a pure UI/UX pass.
+
+REFERENCE DESIGN SYSTEM (extracted from the Products page — treat as the source of truth)
+- Sidebar: dark green background, white text, an icon next to every nav item
+  (Home, Sales, Inventory, Purchases, Employees, Setting), active section expanded
+  with sub-items, user profile card pinned at the bottom (name + role + logout).
+- Page background: light gray/lavender, white rounded cards (soft shadow, ~12px radius)
+  float on top of it.
+- Header: consistent logo + product name treatment across every page (same logo asset,
+  same size, same alignment) — do not let pages use different logo crops or styles.
+- Summary stat cards: a row of 3 light cards at the top of each module, each with a
+  small uppercase gray label and one large bold number (e.g. "PRODUCTS — 37").
+- Action tab bar: a row of pill-shaped buttons directly under the stat cards for
+  switching between sub-views (e.g. "Product List / Add Product / Product Types /
+  Alert Stock"). Active tab = solid orange, inactive = light gray/white with border.
+- Primary action button = solid orange, rounded, top-right of the relevant section
+  (e.g. "+Add"). Never use gray for the primary create/add action.
+- Secondary/utility buttons = light gray/white with border.
+- Status badges = small rounded pill, color-coded semantically:
+  green = positive/good state, red = warning/attention needed,
+  gray = neutral/inactive. Consistent padding, font-weight, and corner radius
+  across every table/list in the app.
+- List/table rows: thumbnail or icon on the left, bold title + secondary meta text,
+  status badge, value/amount on the right, and a "..." actions button — consistent
+  vertical rhythm and hover state.
+- Pagination: "Previous / 1 / 2 / 3 / Next" plus a "Showing X to Y of Z results"
+  caption, right- and left-aligned respectively, on every paginated list.
+- Empty states: never bare text alone — pair with a simple icon/illustration and a
+  short helper sentence in a muted color.
+
+SPECIFIC FIXES REQUIRED ON THE RETURN/REFUNDS PAGE
+
+1. Remove the schema/debug pills entirely
+   ("Invoice No: NUMBER", "Return Date: DATE", "Reason: VARCHAR2", "Status: VARCHAR2",
+   "Detail Return No: NUMBER", "Detail Product No: VARCHAR2", "Detail Qty: NUMBER",
+   "Detail Refund Amount: NUMBER"). These are internal schema notes and must never be
+   visible to end users. Replace the paragraph above them with a short, plain-English
+   one-liner describing what the page does.
+
+2. Add a summary stat card row at the top, matching the Products page pattern, e.g.:
+   "TOTAL RETURNS", "PENDING REFUNDS", "TOTAL REFUNDED ($)" — pull real values from
+   the RETURNS table.
+
+3. Fix the sidebar: add the same icon set used on the Products page sidebar to every
+   nav item (Home, Sales, Invoices, Client Debts, Return/Refunds), and match its width
+   and spacing to the Products page sidebar exactly. Use the same logo asset in the header.
+
+4. Restyle the "Return/Refunds" form card:
+   - Match input, textarea, select, and date-picker styling to the Products page's
+     search bar (rounded corners, consistent border/focus color, consistent height).
+   - "Load Invoice" stays a secondary (outline) button; "Save Return" stays the
+     primary orange button (this one's already correct — keep it).
+   - "Add Product" button in the Returned Products section should NOT be plain gray —
+     make it a clearly secondary but intentional style (outline + orange text, or
+     similar), distinct from disabled-looking gray.
+
+5. Restyle the "Returned Products" table to match the row style used in the Products
+   list (consistent header row, consistent cell padding, zebra striping or row
+   dividers, hover state). Give the empty state ("Load an invoice to add returned
+   products.") a small icon above the text instead of bare copy.
+
+6. Restyle the Status dropdown and all "Refunded"/"Pending"/"Rejected" badges (both
+   in the form and in the history table) using the same badge component/colors as
+   Products' Overstock/Understock/Enough/N/A badges — pick a consistent color mapping,
+   e.g. Refunded = green, Pending = orange, Rejected = red.
+
+7. Restyle the "Search returns" card and results table:
+   - Search input styling to match Products' search bar.
+   - "Apply" = primary orange, "Reset" = secondary outline (already close — just
+     align the exact colors/radius to the design system).
+   - Table headers, row spacing, and the Invoice link color should match the visual
+     weight of the Products list rows.
+   - Add pagination at the bottom of the results table (Previous / page numbers /
+     Next + "Showing X to Y of Z results"), matching the Products page pagination
+     component exactly.
+
+8. General: audit spacing/padding so all cards on this page use the same outer margin
+   and internal padding values as the cards on the Products page. Remove any borders
+   or shadows that don't match the Products card style.
+
+CONSTRAINTS
+- Keep all existing form fields, table columns, and functionality exactly as-is —
+  this is a visual/UX redesign only, not a feature change.
+- Reuse existing shared components (buttons, badges, cards, pagination) from the
+  Products page implementation instead of creating new one-off styles, so the two
+  pages stay in sync going forward.
+- Fully responsive — should collapse gracefully on tablet/mobile like the rest of
+  the app.
+
+DELIVERABLE
+Updated Return/Refunds page markup/component(s) using the shared design system
+components above, with the schema pills removed and all sections restyled per the
+list above.
+```
