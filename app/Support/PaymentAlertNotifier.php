@@ -23,7 +23,9 @@ class PaymentAlertNotifier
     public static function notifyPayment(array $payload, bool $dryRun = false): int
     {
         if (! filter_var((string) env('TELEGRAM_PAYMENT_ALERT_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
-            return 0;
+            Log::info('Telegram payment alert sender is disabled.');
+
+            return 2;
         }
 
         $script = base_path('python/telegram/payment_alert_sender.py');
@@ -109,6 +111,12 @@ class PaymentAlertNotifier
                 'exit_code' => $exitCode,
                 'stdout' => trim($stdout),
                 'stderr' => trim($stderr),
+                'customer_name' => $customerName,
+                'paid_by' => $paidBy,
+                'currency_code' => $currencyCode,
+            ]);
+        } else {
+            Log::info('Telegram payment alert sent successfully.', [
                 'customer_name' => $customerName,
                 'paid_by' => $paidBy,
                 'currency_code' => $currencyCode,
